@@ -1,6 +1,11 @@
 //https://stackoverflow.com/questions/62069386/getting-opencv-headers-to-work-correctly-on-install-in-linux
 //resolves how to fix includes
 
+//https://medium.com/@rachittayal7/a-note-on-opencv-threads-performance-in-prod-d10180716fba
+//worth keeping in mind
+
+//TBB may also be a good thing to try out instead of manually threading things
+
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/core.hpp>
@@ -9,6 +14,7 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
+#include <vector>
 #include <condition_variable>
 
 class BallSensing {
@@ -60,21 +66,50 @@ class BallSensing {
         }
 
         //Wait for a thread to be read in. Once it is read process then go back to waiting.
-        void process_frame() {
-            // std::cout << "Begin process_frame" << std::endl;
-            
+        void process_frame() {            
             while(1) {
             std::unique_lock<std::mutex> mlock(the_mutex); //try to take the lock
             while (!frame_ready) {
                 cond_var.wait(mlock); //wait for a notification from the condvar
             }
-            // std::cout << "Processed a frame!" << std::endl;
 
             //Do some mindless work for testing. This is where image processing happens
             for (int i = 0; i < 100000; i++) {
                 int a = 2; 
             }
-            imshow("Video", current_frame);
+            //imshow("Video", current_frame);
+
+            /* Image processing
+
+            //segment the frame
+            cv::Mat segmented_frame;
+            cv::inRange(current_frame, cv::Scalar(0, 0, 0), cv::Scalar(255, 255, 255), segmented_frame);
+
+            //calculate the contours in the segmented image
+            std::vector<std::vector<cv::Point> > contours;
+            //cv::Mat contourOutput = current_frame.clone();
+            cv::findContours(segmented_frame, contours, CV_RETR_LIST, CV_CHAIN_APPROX_NONE );
+
+            //look at each contour and use the biggest one
+            if (contours.size() > 0) { //if there is a contour
+                cv::Point max_contour = 0
+                int max_area = 0
+                for (int i = 0; i < contours.size(); i++) {
+                    int this_contour_area = cv2::contourArea(contours[i]);
+                    if (this_contour_area > max_area) {
+                        max_area = this_contour_area;
+                        max_contour = contour;
+                    }
+                }
+                //draw a rect around that contour and use its center
+                cv::Rect contour_rect = cv::boundingRect(max_contour);
+                int center_x = contour_rect.x + contour_rect.width / 2;
+                int center_y = contour_rect.y + contour_rect.height / 2;
+                std::cout << "Detected ball center at (" << center_x << "," << center_y << ") at time " << 
+                  std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() << std::endl;
+            }
+            */
+
             if (cv::waitKey(5) >= 0) {
                 return;
             }
