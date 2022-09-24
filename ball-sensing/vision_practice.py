@@ -3,7 +3,7 @@ import datetime
 import numpy as np
 import time
 
-vid = cv2.VideoCapture(1)
+vid = cv2.VideoCapture(0)
 
 H_min = 1000
 H_max = 0
@@ -39,8 +39,8 @@ while(True):
 
     # convert to hsv colorspace
     # lower bound and upper bound for desired color
-    lower_bound = np.array([90, 0, 0])   
-    upper_bound = np.array([255, 80, 80])
+    lower_bound = np.array([170, 245, 245])   
+    upper_bound = np.array([185, 255, 255])
 
     # find the colors within the boundaries
     mask = cv2.inRange(frame, lower_bound, upper_bound)
@@ -77,7 +77,7 @@ while(True):
         prev_time = current_time
         current_time = time.time()
         # print("Current Time: ", current_time, "Previous Time: ", prev_time, "Diff: ", current_time - prev_time)
-        print("Current Freq: ", (float(1) / (current_time - prev_time)))
+        # print("Current Freq: ", (float(1) / (current_time - prev_time)))
 
 
     
