@@ -131,7 +131,19 @@ int main(int argc, char const *argv[]) {
 
     BallState ball;
 
-    // [init path planning interrrupt]
+    // ball.x = 1;
+    // ball.y = 0;
+    // ball.v_x = -1;
+    // ball.v_y = 1;
+
+    // // [init path planning interrrupt]
+    // char example[10] = "12 9";
+
+    // sscanf(example, "%f %f %f %f", &ball.x, &ball.y, &ball.v_x, &ball.v_y);
+
+    // printf("%f %f %f %f\n", ball.x, ball.y, ball.v_x, ball.v_y);
+
+    // exit(1);
 
     while (1) {
         // read ball state
