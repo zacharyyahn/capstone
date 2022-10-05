@@ -1,14 +1,14 @@
-=== Simulator Source Files ===
+# Simulator Source Files
 
---- Purpose--- 
+## Purpose
 
 Simulate the serial output from the Raspberry pi to be 
 received by the MSP.
 
 
----Usage---
+## Usage 
 
-MC Side
+### MC Side
 
 The main.c and UART.h/c files are files are part of a Code 
 Compser Studio project (other files removed to reduce clutter). 
@@ -17,10 +17,12 @@ Interface to interrupt on receiving a character over UART. The
 interrupt handler saves this character to a buffer, and separates
 by line.
 
-Laptop Side
+### Laptop Side
 
 Also included is a python script to be run in format:
-python piout_sim.py <file.txt> <COM#>
+
+```python piout_sim.py <file.txt> <COM#>```
+
 The script will send the contents of the file character by character
 over the specified COM port.
 
@@ -29,7 +31,7 @@ print out the current serial ports. This is especially helpful
 on non-windows systems because instead of COM#, you will need to
 provide the full device name like /dev/tty.usbmodemM43210051
 
----Verification---
+## Verification
 
 The simulator was tested with the included testfile, and the contents
 were successfully received by the MSP. This can be seen in the 
