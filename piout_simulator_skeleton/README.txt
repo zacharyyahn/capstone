@@ -24,6 +24,11 @@ python piout_sim.py <file.txt> <COM#>
 The script will send the contents of the file character by character
 over the specified COM port.
 
+For any platform, run the python script list_serial_ports.py to 
+print out the current serial ports. This is especially helpful 
+on non-windows systems because instead of COM#, you will need to
+provide the full device name like /dev/tty.usbmodemM43210051
+
 ---Verification---
 
 The simulator was tested with the included testfile, and the contents

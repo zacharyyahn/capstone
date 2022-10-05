@@ -11,10 +11,13 @@
 // Current indexes of write buffer and fileline
 int char_index = 0;
 int line_index = 0;
+int latest_received_line = -1;
+int line_received = 0;
+int is_newline;
 
 // Contains interrupt handler for char Rx that writes char to buffer
 // Depending on usage, consider a more robust (FIFO?) structure for buffering lines
-char in_buffer[BUF_LINE][BUF_SIZE];
+char in_buffer[BUF_LINE][BUF_SIZE+1]; // extra spot for null terminator
 
 // Initializes UART mode for eUSCI_A0; follows procedure from technical reference (p. 728)
 void UART_A0_Init(void) {
@@ -72,22 +75,29 @@ void EUSCIA0_IRQHandler(void) {
     if (EUSCI_A0->IFG & 0x01) {
 
         // Rx char stored in RXBUF at time of flag set
+        is_newline = 0;
         char c = ((char) (EUSCI_A0->RXBUF));
         if (c == '\n') {
-            char_index = 0;
-            line_index++;
+            is_newline = 1;
+            c = 0; // null terminator
         }
 
-        // Bounds check
-        if (char_index == BUF_SIZE) {
-            char_index = 0;
-        }
-        if (line_index == BUF_LINE) {
-            line_index = 0;
+        // If the text is overflowing the line, don't save it
+        if (char_index < BUF_SIZE && line_index < BUF_LINE) {
+            in_buffer[line_index][char_index] = c;
+        } else if (char_index == BUF_SIZE) {
+            in_buffer[line_index][BUF_SIZE] = 0; // end with null terminator and throw away character
         }
 
-        in_buffer[line_index][char_index] = c;
-        char_index++;
+        // Setup the spot of the next character to read
+        if (is_newline) {
+            char_index = 0;
+            latest_received_line = line_index++;
+            line_received = 1;
+            line_index %= BUF_LINE;
+        } else {
+            char_index++;
+        }
 
         // Reset flag
         EUSCI_A0->IFG &= ~0x01;
