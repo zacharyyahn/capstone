@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "DRV8935PPWPR")(type "Legacy")(uri "${KIPRJMOD}/ProjectSpecificLibs/ul_DRV8935PPWPR/KiCAD/2022-10-03_23-12-04/2022-10-03_23-12-04.lib")(options "")(descr "Half Bridge (4) Driver DC Motors, General Purpose, Solenoids, Stepper Motors Power MOSFET 28-HTSSOP"))
+)
