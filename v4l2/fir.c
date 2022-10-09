@@ -8,16 +8,18 @@
 #include <time.h>
 #include "videodev2.h"
 
-#define WIDTH           640
-#define HEIGHT          480
-#define PIXEL_FORMAT    V4L2_PIX_FMT_YUYV
-#define BYTES_PER_PIXEL 2
-#define BUF_SIZE        WIDTH*HEIGHT*BYTES_PER_PIXEL
-#define EXPOSURE_TIME	20	// in hundreds of microseconds
+#define WIDTH           	640
+#define HEIGHT          	480
+#define PIXEL_FORMAT    	V4L2_PIX_FMT_YUYV
+#define BYTES_PER_PIXEL 	2
+#define BUF_SIZE        	WIDTH*HEIGHT*BYTES_PER_PIXEL
+#define EXPOSURE_TIME		20	// in hundreds of microseconds
 
-#define TARGET_Y	255
-#define TARGET_U	128
-#define TARGET_V	128
+#define TARGET_Y		255
+#define TARGET_U		128
+#define TARGET_V		128
+#define KERNEL_SIZE		20
+#define AVERAGING_BITSHIFT	8
 
 long loss_function (__u8 *image, __u8 *losses) {
     struct timespec start_time, end_time;
@@ -33,10 +35,66 @@ long loss_function (__u8 *image, __u8 *losses) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
+long filter (__u8 *losses, __u8 *filtered) {
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+
+    int li, lj, fi, fj;
+    long sum;
+    for (li = 0; li < HEIGHT-KERNEL_SIZE; li++) {
+        // iterate over full kernel for first pixel of the row
+	sum = 0;
+        for (fi = li; fi < li+KERNEL_SIZE; fi++) {
+            for (fj = 0; fj < KERNEL_SIZE; fj++) {
+                sum += losses[fi*WIDTH + fj];
+            }
+        }
+	filtered[(li+(KERNEL_SIZE>>1))*WIDTH + (KERNEL_SIZE>>1)] = (__u8) (sum >> AVERAGING_BITSHIFT);
+
+	// circular buffer for rest of the row
+        for (lj = 0; lj < WIDTH-KERNEL_SIZE; lj++) {
+	    for (fi = li; fi < li+KERNEL_SIZE; fi++) {
+                sum += losses[fi*WIDTH + lj+KERNEL_SIZE] - losses[fi*WIDTH + lj];
+	    }
+	    filtered[(li+(KERNEL_SIZE>>1))*WIDTH + (lj+(KERNEL_SIZE>>1))] = (__u8) (sum >> AVERAGING_BITSHIFT);
+	}
+    }
+
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
+}
+
+struct xy {
+    int x;
+    int y;
+};
+
+long argmin (__u8 *filtered, struct xy *pos) {
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+
+    int min_i = 0;
+    __u8 min = filtered[0];
+    int i;
+    for (i = 1; i < WIDTH*HEIGHT; i++) {
+        if (filtered[i] < min) {
+            min = filtered[i];
+	    min_i = i;
+	}
+    }
+    pos->x = min_i % WIDTH;
+    pos->y = min_i / WIDTH;
+
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
+}
+
 int main (void) {
     /******************* SET UP IMAGE PROCESSING *******************/
     __u8 losses[WIDTH*HEIGHT];
     memset(&losses, 0, sizeof(losses));
+    __u8 filtered[WIDTH*HEIGHT];
+    memset(&filtered, 0xFF, sizeof(filtered));
 
 
     /******************* OPEN CAMERA *******************/
@@ -181,38 +239,57 @@ int main (void) {
     
     // dequeue and enqueue each buffer several times
     // this is where the math will happen in the main loop
-    int i;
-    int last_ms = 0;
-    for (i = 0; 1; i++) {
+    //int i;
+    //int last_ms = 0;
+    struct xy ball_pos;
+    struct timespec start_time, end_time;
+    while (1) { //for (i = 0; 1; i++) {
         if (ioctl(v0, VIDIOC_DQBUF, &bs0)) {
             perror("error dequeueing buffer 0");
             return -1;
         }
         //dprintf(2, "dt from camera: %d\n", bs0.timestamp.tv_usec/1000-last_ms);
 	//last_ms = bs0.timestamp.tv_usec/1000;
-	dprintf(2, "loss function time (ms): %d\n", loss_function((__u8*) &buf0, (__u8*) &losses) / 1000000);
-	if (write(fd, losses, sizeof(losses)) == -1) {
-            perror("aosnet");
-        }
+	
+	clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+	loss_function((__u8*) &buf0, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf0, (__u8*) &losses) / 1000000);
         
 	if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
             perror("error enqueueing buffer 0");
             return -1;
         }
+	
+	filter((__u8*) &losses, (__u8*) &filtered); //dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
+        argmin((__u8*) &filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+
+        dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %d\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+	if (write(fd, filtered, sizeof(filtered)) == -1) {
+            perror("aosnet");
+        }
 
         if (ioctl(v0, VIDIOC_DQBUF, &bs1)) {
             perror("error dequeueing buffer 1");
             return -1;
-        }
-        //dprintf(2, "dt from camera: %d\n", bs1.timestamp.tv_usec/1000-last_ms);
+        } 
+       	//dprintf(2, "dt from camera: %d\n", bs1.timestamp.tv_usec/1000-last_ms);
         //last_ms = bs1.timestamp.tv_usec/1000;
-	dprintf(2, "loss function time (ms): %d\n", loss_function((__u8*) &buf1, (__u8*) &losses) / 1000000);
-        if (write(fd, losses, sizeof(losses)) == -1) {
-            perror("aosnet");
-        }
-        if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
+	
+	clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+	loss_function((__u8*) &buf1, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf1, (__u8*) &losses) / 1000000);
+	
+	if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
             perror("error enqueueing buffer 1");
             return -1;
+        }
+	
+	filter((__u8*) &losses, (__u8*) &filtered); // dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
+        argmin((__u8*) &filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+
+        dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %d\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+	if (write(fd, filtered, sizeof(filtered)) == -1) {
+            perror("aosnet");
         }
     }
    
