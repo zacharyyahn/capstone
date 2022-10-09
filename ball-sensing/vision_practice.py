@@ -2,6 +2,7 @@ import cv2
 import datetime
 import numpy as np
 import time
+import imutils
 
 vid = cv2.VideoCapture(0)
 
@@ -22,69 +23,63 @@ while(True):
       
     # Capture the video frame
     # by frame
+    start_time = time.perf_counter()
     ret, frame = vid.read()
+    
 
     #Enables sampling color values of a pixel
-    def mouseRGB(event,x,y,flags,param):
-        if event == cv2.EVENT_LBUTTONDOWN: #checks mouse left button down condition
-            colorsB = frame[y,x,0]
-            colorsG = frame[y,x,1]
-            colorsR = frame[y,x,2]
-            colors = frame[y,x]
-            print("B: ",colorsB)
-            print("G: ",colorsG)
-            print("R: ",colorsR)
-            print("BGR Format: ",colors)
-            print("Coordinates of pixel: X: ", x,"Y: ", y)
+   #def mouseRGB(event,x,y,flags,param):
+    #   if event == cv2.EVENT_LBUTTONDOWN: #checks mouse left button down condition
+     #      colorsB = frame[y,x,0]
+      #     colorsG = frame[y,x,1]
+       #    colorsR = frame[y,x,2]
+        #   colors = frame[y,x]
+        #   print("B: ",colorsB)
+        #   print("G: ",colorsG)
+        #   print("R: ",colorsR)
+        #   print("BGR Format: ",colors)
+        #   print("Coordinates of pixel: X: ", x,"Y: ", y)
 
     # convert to hsv colorspace
     # lower bound and upper bound for desired color
-    lower_bound = np.array([170, 245, 245])   
-    upper_bound = np.array([185, 255, 255])
+    lower_bound = np.array([50, 90, 170])   
+    upper_bound = np.array([90, 120, 215])
 
     # find the colors within the boundaries
     mask = cv2.inRange(frame, lower_bound, upper_bound)
-
-    #Do some denoising:
-    #define kernel size  
-    kernel = np.ones((7,7),np.uint8)
-    # Remove unnecessary noise from mask
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    
+    segment_time = time.perf_counter()
+    #print("Segmenting time: ", segment_time - start_time)
     
     # Segment only the detected region
     segmented_img = cv2.bitwise_and(frame, frame, mask=mask)
     segmented_img = cv2.bitwise_not(segmented_img, segmented_img, mask=mask)
+    
+    mask_time = time.perf_counter()
 
     #get the contour and then draw a rectangle if a contour is found
     contours, hierarchy = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    output = cv2.drawContours(segmented_img, contours, -1, (0, 0, 255), 3)
-    if len(contours) > 0:
-        max_contour = 0
-        max_area = 0
-        for contour in contours:
-            if cv2.contourArea(contour) > max_area:
-                max_area = cv2.contourArea(contour)
-                max_contour = contour
+    #output = cv2.drawContours(segmented_img, contours, -1, (0, 0, 255), 3)
+    found_frame = False
+    for contour in contours:
+        if cv2.contourArea(contour) > 25:
+            found_frame = True
+            x, y, w, h = cv2.boundingRect(contour)
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
+            prev_center= current_center
+            current_center = (x + int(w / 2), y + int(h / 2))
+            cv2.arrowedLine(frame, (prev_center), (current_center), (0, 255, 0), 2)
+            break
 
-        x, y, w, h = cv2.boundingRect(max_contour)
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
-
-        prev_center = current_center
-        current_center = (x + int(w / 2), y + int(h / 2))
-        cv2.arrowedLine(frame, (prev_center), (current_center), (0, 255, 0), 2)
-
-        prev_time = current_time
-        current_time = time.time()
-        # print("Current Time: ", current_time, "Previous Time: ", prev_time, "Diff: ", current_time - prev_time)
-        # print("Current Freq: ", (float(1) / (current_time - prev_time)))
-
-
+    contour_time = time.perf_counter()
+    #print("Contour time: ", contour_time - mask_time)
+    print("Total time: ", contour_time - start_time, found_frame, "\n-------------")
     
+    ball_view = cv2.namedWindow('video', cv2.WINDOW_FULLSCREEN)
     # Display the resulting frame
     cv2.imshow('video', frame)
-    cv2.imshow('segmented',output)
-    cv2.setMouseCallback('video',mouseRGB)
+    cv2.imshow('segmented',segmented_img)
+   #cv2.setMouseCallback('video',mouseRGB)
 
       
     # the 'q' button is set as the
