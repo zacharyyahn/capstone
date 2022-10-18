@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <time.h>
 #include "videodev2.h"
+#include "yay.h"
 
 #define WIDTH               640
 #define HEIGHT              480
@@ -15,11 +16,15 @@
 #define BUF_SIZE            WIDTH*HEIGHT*BYTES_PER_PIXEL
 #define EXPOSURE_TIME       20    // in hundreds of microseconds
 
-#define TARGET_Y            255
-#define TARGET_U            128
-#define TARGET_V            128
+#define TARGET_Y            target_y
+#define TARGET_U            target_u
+#define TARGET_V            target_v
 #define KERNEL_SIZE         20
 #define AVERAGING_BITSHIFT  8
+
+__u8 target_y = 255;
+__u8 target_u = 128;
+__u8 target_v = 128;
 
 long loss_function (__u8 *image, __u8 *losses) {
     struct timespec start_time, end_time;
@@ -27,9 +32,22 @@ long loss_function (__u8 *image, __u8 *losses) {
     int i, C_loss;
     for (i = 0; i < BUF_SIZE; i += 4) {
         C_loss = (TARGET_U > image[i+1] ? TARGET_U - image[i+1] : image[i+1] - TARGET_U) +
-                 (TARGET_V > image[i+3] ? TARGET_V - image[i+3] : image[i+3] - TARGET_U);
+                 (TARGET_V > image[i+3] ? TARGET_V - image[i+3] : image[i+3] - TARGET_V);
         losses[i >> 1]       = ((TARGET_Y > image[i]   ? TARGET_Y - image[i]   : image[i]   - TARGET_Y) + C_loss) >> 2;
+	//if (losses[i >> 1] >= 32) {
+	//    losses[i >> 1] = 255;
+	//} else {
+	//    losses[i >> 1] >>= 3;
+	//}
+        //losses[i >> 1] = 255 - losses[i >> 1];
+
         losses[(i >> 1) + 1] = ((TARGET_Y > image[i+2] ? TARGET_Y - image[i+2] : image[i+2] - TARGET_Y) + C_loss) >> 2;
+	//if (losses[(i >> 1) + 1] >= 32) {
+	//    losses[(i >> 1) + 1] = 255;
+	//} else {
+	//    losses[(i >> 1) + 1] >>= 3;
+	//}
+	//losses[(i >> 1) + 1] = 255 - losses[(i >> 1) + 1];
     }
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -52,7 +70,7 @@ long filter (__u8 *losses, __u8 *filtered) {
         filtered[(li+(KERNEL_SIZE>>1))*WIDTH + (KERNEL_SIZE>>1)] = (__u8) (sum >> AVERAGING_BITSHIFT);
 
         // circular buffer for rest of the row
-        for (lj = 0; lj < WIDTH-KERNEL_SIZE; lj++) {
+        for (lj = 1; lj < WIDTH-KERNEL_SIZE; lj++) {
             for (fi = li; fi < li+KERNEL_SIZE; fi++) {
                 sum += losses[fi*WIDTH + lj+KERNEL_SIZE] - losses[fi*WIDTH + lj];
             }
@@ -84,12 +102,15 @@ long argmin (__u8 *filtered, struct xy *pos) {
     }
     pos->x = min_i % WIDTH;
     pos->y = min_i / WIDTH;
+    filtered[min_i] = 0xFF;
 
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
-int main (void) {
+int main (int argc, char *argv[]) {
+    init_SDL(argc, argv);
+
     /******************* SET UP IMAGE PROCESSING *******************/
     __u8 losses[WIDTH*HEIGHT];
     memset(&losses, 0, sizeof(losses));
@@ -148,21 +169,21 @@ int main (void) {
 
     ec[0].id = V4L2_CID_EXPOSURE_AUTO;
     ec[0].value = V4L2_EXPOSURE_APERTURE_PRIORITY;
-    //ec[1].id = V4L2_CID_EXPOSURE_ABSOLUTE;
-    //ec[1].value = EXPOSURE_TIME;
+//    ec[1].id = V4L2_CID_EXPOSURE_ABSOLUTE;
+//    ec[1].value = EXPOSURE_TIME;
 
     if (ioctl(v0, VIDIOC_S_EXT_CTRLS, &ecs)) {
         perror("error setting camera controls");
         return -1;
     }
     ec[0].value = 0;
-    //ec[1].value = 0;
+//    ec[1].value = 0;
     if (ioctl(v0, VIDIOC_G_EXT_CTRLS, &ecs)) {
         perror("error querying camera controls");
         return -1;
     }
-    assert(ec[0].value = V4L2_EXPOSURE_MANUAL);
-    //assert(ec[1].value = EXPOSURE_TIME);
+    assert(ec[0].value == V4L2_EXPOSURE_APERTURE_PRIORITY);
+//    assert(ec[1].value == EXPOSURE_TIME);
 
 
     /******************* SET STREAM PARAMS *******************/
@@ -178,7 +199,7 @@ int main (void) {
     if (ioctl(v0, VIDIOC_S_PARM, &parms)) {
         perror("error setting stream params");
     }
-    dprintf(stderr, "stream capabilites: %#06x\ttimeperframe: %d/%d\n", 
+    dprintf(2, "stream capabilites: %#06x\ttimeperframe: %d/%d\n", 
             parms.parm.capture.capability, parms.parm.capture.timeperframe.numerator, parms.parm.capture.timeperframe.denominator);
 
 
@@ -192,8 +213,8 @@ int main (void) {
         perror("error requesting buffers");
         return -1;
     }
-    dprintf(stderr, "buffer capabilities: %#010x\n", req.capabilities);
-    dprintf(stderr, "driver allocated %d buffers\n", req.count);
+    dprintf(2, "buffer capabilities: %#010x\n", req.capabilities);
+    dprintf(2, "driver allocated %d buffers\n", req.count);
 
 
     /******************* BUFFER 0 SETUP *******************/
@@ -240,7 +261,7 @@ int main (void) {
     
     // main loop: dequeue, process, then re-enqueue each buffer indefinitely
     //int i;
-    //int last_ms = 0;
+    int last_ms = 0;
     struct xy ball_pos;
     struct timespec start_time, end_time;
     while (1) { //for (i = 0; 1; i++) {
@@ -248,49 +269,50 @@ int main (void) {
             perror("error dequeueing buffer 0");
             return -1;
         }
-        //dprintf(stderr, "dt from camera: %d\n", bs0.timestamp.tv_usec/1000-last_ms);
-        //last_ms = bs0.timestamp.tv_usec/1000;
+        //dprintf(2, "dt from camera: %ld\n", bs0.timestamp.tv_usec/1000-last_ms);
+        last_ms = bs0.timestamp.tv_usec/1000;
     
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-        loss_function((__u8*) &buf0, (__u8*) &losses); // dprintf(stderr, "loss function time (ms): %d\t", loss_function((__u8*) &buf0, (__u8*) &losses) / 1000000);
+        loss_function((__u8*) &buf0, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf0, (__u8*) &losses) / 1000000);
             
-        if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
-            perror("error enqueueing buffer 0");
-            return -1;
-        }
-        
-        filter((__u8*) &losses, (__u8*) &filtered); //dprintf(stderr, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
-        argmin((__u8*) &filtered, &ball_pos); //dprintf(stderr, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
+                
+        filter((__u8*) &losses, (__u8*) &filtered); //dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
+        argmin((__u8*) &filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
         clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
 
-        dprintf(stderr, "ball pos: (%d, %d)\ttotal calculation time (ms): %d\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
-        if (write(fd, filtered, sizeof(filtered)) == -1) {
-            perror("error writing image output");
+        dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        if (output_SDL(filtered)) return -1;
+        handle_SDL_events((__u8*) &buf0, (__u8*) &losses);
+        
+	if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
+            perror("error enqueueing buffer 0");
+            return -1;
         }
 
         if (ioctl(v0, VIDIOC_DQBUF, &bs1)) {
             perror("error dequeueing buffer 1");
             return -1;
         } 
-        //dprintf(stderr, "dt from camera: %d\n", bs1.timestamp.tv_usec/1000-last_ms);
-        //last_ms = bs1.timestamp.tv_usec/1000;
+        //dprintf(2, "dt from camera: %ld\n", bs1.timestamp.tv_usec/1000-last_ms);
+        last_ms = bs1.timestamp.tv_usec/1000;
         
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-        loss_function((__u8*) &buf1, (__u8*) &losses); // dprintf(stderr, "loss function time (ms): %d\t", loss_function((__u8*) &buf1, (__u8*) &losses) / 1000000);
+        loss_function((__u8*) &buf1, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf1, (__u8*) &losses) / 1000000);
         
-        if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
+                
+        filter((__u8*) &losses, (__u8*) &filtered); // dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
+        argmin((__u8*) &filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+
+        dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        if (output_SDL(filtered)) return -1;
+	handle_SDL_events((__u8*) &buf1, (__u8*) &losses);
+        
+	if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
             perror("error enqueueing buffer 1");
             return -1;
         }
-        
-        filter((__u8*) &losses, (__u8*) &filtered); // dprintf(stderr, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
-        argmin((__u8*) &filtered, &ball_pos); // dprintf(stderr, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
-        clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
 
-        dprintf(stderr, "ball pos: (%d, %d)\ttotal calculation time (ms): %d\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
-        if (write(fd, filtered, sizeof(filtered)) == -1) {
-            perror("error writing image output");
-        }
     }
     
     if (ioctl(v0, VIDIOC_STREAMOFF, &buf_type)) {
