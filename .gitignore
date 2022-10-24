@@ -130,3 +130,8 @@ dmypy.json
 
 # editors
 .vscode
+
+# binaries and object files
+v4l2/fir
+*.o
+

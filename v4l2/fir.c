@@ -25,6 +25,7 @@
 __u8 target_y = 255;
 __u8 target_u = 128;
 __u8 target_v = 128;
+int quit = 0;
 
 long loss_function (__u8 *image, __u8 *losses) {
     struct timespec start_time, end_time;
@@ -34,20 +35,20 @@ long loss_function (__u8 *image, __u8 *losses) {
         C_loss = (TARGET_U > image[i+1] ? TARGET_U - image[i+1] : image[i+1] - TARGET_U) +
                  (TARGET_V > image[i+3] ? TARGET_V - image[i+3] : image[i+3] - TARGET_V);
         losses[i >> 1]       = ((TARGET_Y > image[i]   ? TARGET_Y - image[i]   : image[i]   - TARGET_Y) + C_loss) >> 2;
-	//if (losses[i >> 1] >= 32) {
-	//    losses[i >> 1] = 255;
-	//} else {
-	//    losses[i >> 1] >>= 3;
-	//}
-        //losses[i >> 1] = 255 - losses[i >> 1];
+	if (losses[i >> 1] >= 16) {
+	    losses[i >> 1] = 255;
+	} else {
+	    losses[i >> 1] <<= 4;
+	}
+        losses[i >> 1] = 255 - losses[i >> 1];
 
         losses[(i >> 1) + 1] = ((TARGET_Y > image[i+2] ? TARGET_Y - image[i+2] : image[i+2] - TARGET_Y) + C_loss) >> 2;
-	//if (losses[(i >> 1) + 1] >= 32) {
-	//    losses[(i >> 1) + 1] = 255;
-	//} else {
-	//    losses[(i >> 1) + 1] >>= 3;
-	//}
-	//losses[(i >> 1) + 1] = 255 - losses[(i >> 1) + 1];
+	if (losses[(i >> 1) + 1] >= 16) {
+	    losses[(i >> 1) + 1] = 255;
+	} else {
+	    losses[(i >> 1) + 1] <<= 4;
+	}
+	losses[(i >> 1) + 1] = 255 - losses[(i >> 1) + 1];
     }
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -108,6 +109,20 @@ long argmin (__u8 *filtered, struct xy *pos) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
+//Detect if a ball exists based on how many pixels have a loss greater than
+//253 when using inverted loss (255 is the best, 0 is the worst)
+int ball_exists(__u8 *losses) {
+    int num_pixels = 0;
+    int i;
+    int threshold = 253; //will decide once we have painted ball
+    int expected_pixels = 1000; //will decide once we have painted ball
+    for (i = 0; i < HEIGHT * WIDTH; i++) {
+	if (losses[i] > threshold) num_pixels++;
+    }
+    if (num_pixels > expected_pixels) return 1;
+    return 0;
+}    
+
 int main (int argc, char *argv[]) {
     init_SDL(argc, argv);
 
@@ -122,11 +137,6 @@ int main (int argc, char *argv[]) {
     int v0 = open("/dev/video0", O_RDWR);
     if (v0 < 0) {
         perror("couldn't open video0");
-        return -1;
-    }
-    int fd = 1; // open("test.yuv", O_WRONLY | O_CREAT | O_TRUNC, 00644);
-    if (fd < 0) {
-        perror("error opening image output file");
         return -1;
     }
 
@@ -264,7 +274,7 @@ int main (int argc, char *argv[]) {
     int last_ms = 0;
     struct xy ball_pos;
     struct timespec start_time, end_time;
-    while (1) { //for (i = 0; 1; i++) {
+    while (!quit) {
         if (ioctl(v0, VIDIOC_DQBUF, &bs0)) {
             perror("error dequeueing buffer 0");
             return -1;
@@ -275,13 +285,17 @@ int main (int argc, char *argv[]) {
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
         loss_function((__u8*) &buf0, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf0, (__u8*) &losses) / 1000000);
             
-                
-        filter((__u8*) &losses, (__u8*) &filtered); //dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
-        argmin((__u8*) &filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
-        clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-
+        if (1) { //(ball_exists((__u8*) &losses)) {        
+            filter((__u8*) &losses, (__u8*) &filtered); //dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
+            argmin((__u8*) &filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
+	} else {
+	    ball_pos.x = -1;
+	    ball_pos.y = -1;
+	}
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
         dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
-        if (output_SDL(filtered)) return -1;
+        
+	if (output_SDL(losses)) return -1;
         handle_SDL_events((__u8*) &buf0, (__u8*) &losses);
         
 	if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
@@ -299,21 +313,25 @@ int main (int argc, char *argv[]) {
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
         loss_function((__u8*) &buf1, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf1, (__u8*) &losses) / 1000000);
         
-                
-        filter((__u8*) &losses, (__u8*) &filtered); // dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
-        argmin((__u8*) &filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
-        clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+	if (1) { //(ball_exists((__u8*) &losses)) {
+            filter((__u8*) &losses, (__u8*) &filtered); // dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
+            argmin((__u8*) &filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
+	} else {
+ 	    ball_pos.x = -1;
+	    ball_pos.y = -1;
+	}
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
 
         dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
-        if (output_SDL(filtered)) return -1;
+
+        if (output_SDL(losses)) return -1;
 	handle_SDL_events((__u8*) &buf1, (__u8*) &losses);
         
 	if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
             perror("error enqueueing buffer 1");
             return -1;
         }
-
-    }
+    }  // end while
     
     if (ioctl(v0, VIDIOC_STREAMOFF, &buf_type)) {
         perror("error stopping stream");
@@ -322,7 +340,8 @@ int main (int argc, char *argv[]) {
     if (close(v0)) {
         perror("error closing device video0");
     }
-    close(fd);
+
+    cleanup_SDL();
 
     return 0;
 }

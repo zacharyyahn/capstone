@@ -52,7 +52,7 @@ Uint8 *y_data, *cr_data, *cb_data, *tmp_data;
 Uint16 zoom = 1;
 Uint16 min_zoom = 1;
 Uint16 frame = 0;
-Uint16 quit = 0;
+extern int quit;
 Uint8 grid = 0;
 Uint8 bpp = 0;
 int cfidc = 1;
@@ -340,6 +340,14 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
       case SDL_VIDEOEXPOSE:
 	SDL_DisplayYUVOverlay(my_overlay, &video_rect);
 	break;
+      case SDL_KEYDOWN:
+        switch (event.key.keysym.sym) {
+	  case SDLK_q:
+            quit = 1;
+	    break;
+	  default:
+	    break;
+	}  // switch key
       default:
 	break;
 
@@ -355,6 +363,15 @@ int output_SDL (__u8 *buf) {
   draw_frame();
   frame++;
   return 0;
+}
+
+void cleanup_SDL () {
+  SDL_FreeYUVOverlay(my_overlay); 
+  free(y_data);
+  free(cb_data);
+  free(cr_data);
+  free(tmp_data);
+  fclose(fpointer);
 }
 
 #ifdef DUMMY
