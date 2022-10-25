@@ -25,7 +25,91 @@
 __u8 target_y = 255;
 __u8 target_u = 128;
 __u8 target_v = 128;
+
+#define CORNER_WIDTH            300
+#define CORNER_HEIGHT           200
+#define CORNER_LOSS_THRESHOLD   60
+#define CORNER_Y                corner_y
+#define CORNER_U                corner_u
+#define CORNER_V                corner_v
+
+__u8 corner_y = 255;
+__u8 corner_u = 128;
+__u8 corner_v = 128;
+
 int quit = 0;
+
+struct xy {
+    int x;
+    int y;
+};
+
+long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right) {
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+
+    // track min-loss position in the return structs
+    top_left->x = 0;
+    top_left->y = 0;
+    top_right->x = WIDTH-1;
+    top_right->y = 0;
+
+    // top-left corner
+    int i, j, pix0, pix1, C_loss;
+    for (i = 0; i < CORNER_HEIGHT; i++) {
+        for (j = 0; j < CORNER_WIDTH; j += 2) {
+            pix0 = (i*WIDTH + j) << 1;
+            pix1 = pix0 + 2;
+
+            C_loss = (CORNER_U > image[pix0+1] ? CORNER_U - image[pix0+1] : image[pix0+1] - CORNER_U) +
+                     (CORNER_V > image[pix0+3] ? CORNER_V - image[pix0+3] : image[pix0+3] - CORNER_V);
+            
+            // check rightmost pixel first
+            if (     (CORNER_Y > image[pix1]   ? CORNER_Y - image[pix1]   : image[pix1]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if (i + (j + 1) > top_left->x + top_left->y) {
+                    top_left->x = j + 1;
+                    top_left->y = i;
+                }
+            } 
+            // only check leftmost pixel if rightmost isn't a match
+            else if ((CORNER_Y > image[pix0]   ? CORNER_Y - image[pix0]   : image[pix0]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if (i + j > top_left->x + top_left->y) {
+                    top_left->x = j;
+                    top_left->y = i;
+                }
+            }
+        }
+    }
+
+    //top-right corner
+    for (i = 0; i < CORNER_HEIGHT; i++) {
+        for (j = WIDTH - CORNER_WIDTH; j < WIDTH; j += 2) {
+            pix0 = (i*WIDTH + j) << 1;
+            pix1 = pix0 + 2;
+
+            C_loss = (CORNER_U > image[pix0+1] ? CORNER_U - image[pix0+1] : image[pix0+1] - CORNER_U) +
+                     (CORNER_V > image[pix0+3] ? CORNER_V - image[pix0+3] : image[pix0+3] - CORNER_V);
+            
+            // check leftmost pixel first
+            if (     (CORNER_Y > image[pix0]   ? CORNER_Y - image[pix0]   : image[pix0]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if (i - j > top_right->y - top_right->x) {
+                    top_right->x = j;
+                    top_right->y = i;
+                }
+            }
+            // only check rightmost pixel if leftmost isn't a match
+            else if ((CORNER_Y > image[pix1]   ? CORNER_Y - image[pix1]   : image[pix1]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if (i - (j + 1) > top_right->y - top_right->x) {
+                    top_right->x = j + 1;
+                    top_right->y = i;
+                }
+            }
+        }
+    }
+
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
+}
 
 long loss_function (__u8 *image, __u8 *losses) {
     struct timespec start_time, end_time;
@@ -35,20 +119,21 @@ long loss_function (__u8 *image, __u8 *losses) {
         C_loss = (TARGET_U > image[i+1] ? TARGET_U - image[i+1] : image[i+1] - TARGET_U) +
                  (TARGET_V > image[i+3] ? TARGET_V - image[i+3] : image[i+3] - TARGET_V);
         losses[i >> 1]       = ((TARGET_Y > image[i]   ? TARGET_Y - image[i]   : image[i]   - TARGET_Y) + C_loss) >> 2;
-	if (losses[i >> 1] >= 16) {
-	    losses[i >> 1] = 255;
-	} else {
-	    losses[i >> 1] <<= 4;
-	}
-        losses[i >> 1] = 255 - losses[i >> 1];
-
         losses[(i >> 1) + 1] = ((TARGET_Y > image[i+2] ? TARGET_Y - image[i+2] : image[i+2] - TARGET_Y) + C_loss) >> 2;
-	if (losses[(i >> 1) + 1] >= 16) {
-	    losses[(i >> 1) + 1] = 255;
-	} else {
-	    losses[(i >> 1) + 1] <<= 4;
-	}
-	losses[(i >> 1) + 1] = 255 - losses[(i >> 1) + 1];
+	
+        //if (losses[i >> 1] >= 16) {
+	//    losses[i >> 1] = 255;
+	//} else {
+	//    losses[i >> 1] <<= 4;
+	//}
+        //losses[i >> 1] = 255 - losses[i >> 1];
+
+	//if (losses[(i >> 1) + 1] >= 16) {
+	//    losses[(i >> 1) + 1] = 255;
+	//} else {
+	//    losses[(i >> 1) + 1] <<= 4;
+	//}
+	//losses[(i >> 1) + 1] = 255 - losses[(i >> 1) + 1];
     }
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -82,11 +167,6 @@ long filter (__u8 *losses, __u8 *filtered) {
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
-
-struct xy {
-    int x;
-    int y;
-};
 
 long argmin (__u8 *filtered, struct xy *pos) {
     struct timespec start_time, end_time;
@@ -269,10 +349,9 @@ int main (int argc, char *argv[]) {
         return -1;
     }
     
-    // main loop: dequeue, process, then re-enqueue each buffer indefinitely
-    //int i;
+    // main loop: dequeue, process, then re-enqueue each buffer until q is pressed
     int last_ms = 0;
-    struct xy ball_pos;
+    struct xy ball_pos, top_left, top_right;
     struct timespec start_time, end_time;
     while (!quit) {
         if (ioctl(v0, VIDIOC_DQBUF, &bs0)) {
@@ -283,20 +362,24 @@ int main (int argc, char *argv[]) {
         last_ms = bs0.timestamp.tv_usec/1000;
     
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-        loss_function((__u8*) &buf0, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf0, (__u8*) &losses) / 1000000);
+        loss_function(buf0, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(buf0, losses) / 1000000);
             
-        if (1) { //(ball_exists((__u8*) &losses)) {        
-            filter((__u8*) &losses, (__u8*) &filtered); //dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
-            argmin((__u8*) &filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
+        if (1) { //(ball_exists(losses)) {
+            filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
+            argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
+            find_corners(buf0, &top_left, &top_right);
+            losses[top_left.x + WIDTH*top_left.y] = 0xFF;
+            losses[top_right.x + WIDTH*top_right.y] = 0xFF;
 	} else {
 	    ball_pos.x = -1;
 	    ball_pos.y = -1;
 	}
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-        dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        //dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
         
 	if (output_SDL(losses)) return -1;
-        handle_SDL_events((__u8*) &buf0, (__u8*) &losses);
+        handle_SDL_events(buf0, losses);
         
 	if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
             perror("error enqueueing buffer 0");
@@ -311,21 +394,25 @@ int main (int argc, char *argv[]) {
         last_ms = bs1.timestamp.tv_usec/1000;
         
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-        loss_function((__u8*) &buf1, (__u8*) &losses); // dprintf(2, "loss function time (ms): %d\t", loss_function((__u8*) &buf1, (__u8*) &losses) / 1000000);
+        loss_function(buf1, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(buf1, losses) / 1000000);
         
-	if (1) { //(ball_exists((__u8*) &losses)) {
-            filter((__u8*) &losses, (__u8*) &filtered); // dprintf(2, "filter time (ms): %d\t", filter((__u8*) &losses, (__u8*) &filtered) / 1000000);
-            argmin((__u8*) &filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin((__u8*) &filtered, &ball_pos) / 1000000);
-	} else {
+	if (1) { //(ball_exists(losses)) {
+            filter(losses, filtered); // dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
+            argmin(filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
+	    find_corners(buf1, &top_left, &top_right);
+            losses[top_left.x + WIDTH*top_left.y] = 0xFF;
+            losses[top_right.x + WIDTH*top_right.y] = 0xFF;
+        } else {
  	    ball_pos.x = -1;
 	    ball_pos.y = -1;
 	}
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
 
-        dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        //dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
 
         if (output_SDL(losses)) return -1;
-	handle_SDL_events((__u8*) &buf1, (__u8*) &losses);
+	handle_SDL_events(buf1, losses);
         
 	if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
             perror("error enqueueing buffer 1");

@@ -84,6 +84,11 @@ static const Uint8 FrameSize2C[4] =
     2, 3, 4, 6
   };
 
+typedef enum {
+    SET_BALL,
+    SET_CORNER,
+} CLICK_MODE;
+CLICK_MODE click_mode = SET_BALL;
 
 int load_frame(__u8 *buf){
   /* Fill in video data */
@@ -314,6 +319,7 @@ int init_SDL(int argc, char *argv[]) {
 
 #define WIDTH 640
 extern __u8 target_y, target_u, target_v;
+extern __u8 corner_y, corner_u, corner_v;
 void handle_SDL_events (__u8 *buf, __u8 *losses) {
   while (SDL_PollEvent(&event)) {
     switch(event.type)
@@ -321,11 +327,24 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
       case SDL_MOUSEBUTTONDOWN:
 	if (event.button.button == SDL_BUTTON_LEFT) {
 	  int pixel_i = event.button.y*WIDTH + event.button.x;
-	  target_y = buf[pixel_i << 1];
 	  int color_i = (pixel_i & 0x0001) == 0 ? pixel_i : pixel_i-1;
-	  target_u = buf[(color_i << 1) + 1];
-	  target_v = buf[(color_i << 1) + 3];
-	  dprintf(2, "setting target YUV to %d, %d, %d\n", target_y, target_u, target_v);
+	  
+          switch (click_mode) {
+          case SET_BALL:
+            target_y = buf[pixel_i << 1];
+	    target_u = buf[(color_i << 1) + 1];
+	    target_v = buf[(color_i << 1) + 3];
+	    dprintf(2, "setting target YUV to %d, %d, %d\n", target_y, target_u, target_v);
+            break;
+          case SET_CORNER:
+            corner_y = buf[pixel_i << 1];
+            corner_u = buf[(color_i << 1) + 1];
+            corner_v = buf[(color_i << 1) + 3];
+            dprintf(2, "setting corner YUV to %d, %d, %d\n", corner_y, corner_u, corner_v);
+            break;
+          default:
+            break;
+          }  // switch click_mode
 	} else if (event.button.button == SDL_BUTTON_RIGHT) {
 	  int pixel_i = event.button.y*WIDTH + event.button.x;
           int color_i = (pixel_i & 0x0001) == 0 ? pixel_i : pixel_i-1;
@@ -345,6 +364,12 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
 	  case SDLK_q:
             quit = 1;
 	    break;
+          case SDLK_b:
+            click_mode = SET_BALL;
+            break;
+          case SDLK_c:
+            click_mode = SET_CORNER;
+            break;
 	  default:
 	    break;
 	}  // switch key
@@ -356,9 +381,17 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
 }
 
 int output_SDL (__u8 *buf) {
-  char caption[32];
-  sprintf(caption, "frame %d, zoom=%d", frame, zoom);
-  SDL_WM_SetCaption( caption, NULL );
+  switch (click_mode) {
+  case SET_BALL:
+    SDL_WM_SetCaption("mode: set ball color", NULL);
+    break;
+  case SET_CORNER:
+    SDL_WM_SetCaption("mode: set corner color", NULL);
+    break;
+  default:
+    SDL_WM_SetCaption("mode: unknown", NULL);
+    break;
+  }
   if (load_frame(buf)) return 1;
   draw_frame();
   frame++;
