@@ -9,18 +9,18 @@
 #include "videodev2.h"
 #include "yay.h"
 
-#define WIDTH               640
-#define HEIGHT              480
-#define PIXEL_FORMAT        V4L2_PIX_FMT_YUYV
-#define BYTES_PER_PIXEL     2
-#define BUF_SIZE            WIDTH*HEIGHT*BYTES_PER_PIXEL
-#define EXPOSURE_TIME       20    // in hundreds of microseconds
+#define WIDTH                   640
+#define HEIGHT                  480
+#define PIXEL_FORMAT            V4L2_PIX_FMT_YUYV
+#define BYTES_PER_PIXEL         2
+#define BUF_SIZE                WIDTH*HEIGHT*BYTES_PER_PIXEL
+#define EXPOSURE_TIME           20    // in hundreds of microseconds
 
-#define TARGET_Y            target_y
-#define TARGET_U            target_u
-#define TARGET_V            target_v
-#define KERNEL_SIZE         20
-#define AVERAGING_BITSHIFT  8
+#define TARGET_Y                target_y
+#define TARGET_U                target_u
+#define TARGET_V                target_v
+#define KERNEL_SIZE             20
+#define AVERAGING_BITSHIFT      8
 
 #define CORNER_WIDTH            300
 #define CORNER_HEIGHT           200
@@ -28,6 +28,8 @@
 #define CORNER_Y                corner_y
 #define CORNER_U                corner_u
 #define CORNER_V                corner_v
+
+#define TABLE_LENGTH            300.0   // mm
 
 // globals
 __u8 target_y = 255;
@@ -48,6 +50,11 @@ int quit = 0;
 struct xy {
     int x;
     int y;
+};
+
+struct xyf {
+    float x;
+    float y;
 };
 
 long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 *losses) {
@@ -151,6 +158,22 @@ long loss_function (__u8 *image, __u8 *losses) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
+//Detect if a ball exists based on how many pixels have a loss greater than
+//253 when using inverted loss (255 is the best, 0 is the worst)
+int ball_exists(__u8 *losses) {
+    int num_pixels = 0;
+    int i;
+    int threshold = 12; //will decide once we have painted ball
+    int expected_pixels = 300; //will decide once we have painted ball
+    for (i = 0; i < HEIGHT * WIDTH; i++) {
+        if (losses[i] < threshold) num_pixels++;
+    }
+    //dprintf(2, "num of ball pixels found: %d\n", num_pixels);
+    if (num_pixels > expected_pixels) return 1;
+
+    return 0;
+} 
+
 long filter (__u8 *losses, __u8 *filtered) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
@@ -201,21 +224,20 @@ long argmin (__u8 *filtered, struct xy *pos) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
-//Detect if a ball exists based on how many pixels have a loss greater than
-//253 when using inverted loss (255 is the best, 0 is the worst)
-int ball_exists(__u8 *losses) {
-    int num_pixels = 0;
-    int i;
-    int threshold = 12; //will decide once we have painted ball
-    int expected_pixels = 300; //will decide once we have painted ball
-    for (i = 0; i < HEIGHT * WIDTH; i++) {
-        if (losses[i] < threshold) num_pixels++;
-    }
-    //dprintf(2, "num of ball pixels found: %d\n", num_pixels);
-    if (num_pixels > expected_pixels) return 1;
+long relative_position (struct xy *top_left, struct xy *top_right, struct xy *ball_pos, struct xyf *rel_pos) {
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
-    return 0;
-}    
+    float d_squared = (top_right->y - top_left->y) * (top_right->y - top_left->y) + 
+                      (top_right->x - top_left->x) * (top_right->x - top_left->x);
+    rel_pos->x = TABLE_LENGTH / d_squared * ((top_right->x - top_left->x) * (ball_pos->x - top_left->x) +
+                                             (top_right->y - top_left->y) * (ball_pos->y - top_left->y));
+    rel_pos->y = TABLE_LENGTH / d_squared * ((top_left->y - top_right->y) * (ball_pos->x - top_left->x) +
+                                             (top_right->x - top_left->x) * (ball_pos->y - top_left->y));
+
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
+}
 
 int main () {
     init_SDL();
@@ -367,6 +389,7 @@ int main () {
     int last_ms = 0;
     struct xy prev_vel, this_vel, prev_pos;
     struct xy ball_pos, top_left, top_right;
+    struct xyf rel_pos;
     struct timespec start_time, end_time;
     while (!quit) {
         if (ioctl(v0, VIDIOC_DQBUF, &bs0)) {
@@ -383,6 +406,8 @@ int main () {
             filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
             argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
             find_corners(buf0, &top_left, &top_right, losses); //dprintf(2, "corner time (ms): %ld\n", find_corners(buf0, &top_left, &top_right) / 1000000);
+            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);
+            dprintf(2, "found relative ball position (%f, %f)\n", rel_pos.x, rel_pos.y);
             losses[top_left.x + WIDTH*top_left.y] = 0xFF;
             losses[top_right.x + WIDTH*top_right.y] = 0xFF;
             if (prev_pos.x != 0 && prev_pos.y != 0) {
@@ -428,6 +453,8 @@ int main () {
             find_corners(buf0, &top_left, &top_right, losses); // dprintf(2, "corner time (ms): %ld\n", find_corners(buf0, &top_left, &top_right) / 1000000);
             losses[top_left.x + WIDTH*top_left.y] = 0xFF;
             losses[top_right.x + WIDTH*top_right.y] = 0xFF;
+            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);
+            dprintf(2, "found relative ball position (%f, %f)\n", rel_pos.x, rel_pos.y);
             if(prev_pos.x != 0 && prev_pos.y != 0) {
                 this_vel.x = ball_pos.x - prev_pos.x;
                 this_vel.y = ball_pos.y - prev_pos.y;
