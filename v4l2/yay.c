@@ -38,6 +38,37 @@
 //#include "SDL.h"
 #include <SDL/SDL.h>
 
+// globals
+#define WIDTH 640
+#define HEIGHT 640
+extern __u8 target_y;
+extern __u8 target_u;
+extern __u8 target_v;
+
+extern int loss_contrast_booster;
+
+extern __u8 corner_y;
+extern __u8 corner_u;
+extern __u8 corner_v;
+extern int corner_loss_threshold;
+extern int corner_threshold_calibrate;
+
+extern int quit;
+// end globals
+
+typedef enum {
+  SET_BALL,
+  SET_CORNER,
+} CLICK_MODE;
+CLICK_MODE click_mode = SET_BALL;
+
+typedef enum {
+  COLOR,
+  LOSS,
+  FILTER,
+} OUTPUT_MODE;
+OUTPUT_MODE output_mode = COLOR;
+
 SDL_Surface     *screen;
 SDL_Event       event;
 SDL_Rect        video_rect;
@@ -52,7 +83,6 @@ Uint8 *y_data, *cr_data, *cb_data, *tmp_data;
 Uint16 zoom = 1;
 Uint16 min_zoom = 1;
 Uint16 frame = 0;
-extern int quit;
 Uint8 grid = 0;
 Uint8 bpp = 0;
 int cfidc = 1;
@@ -83,12 +113,6 @@ static const Uint8 FrameSize2C[4] =
   {
     2, 3, 4, 6
   };
-
-typedef enum {
-    SET_BALL,
-    SET_CORNER,
-} CLICK_MODE;
-CLICK_MODE click_mode = SET_BALL;
 
 int load_frame(__u8 *buf){
   /* Fill in video data */
@@ -206,56 +230,12 @@ void print_usage(){
   fprintf(stdout, "Usage: yay [-s <widht>x<heigh>] [-f format] [-p] filename.yuv\n\t format can be: 0-Y only, 1-YUV420, 2-YUV422, 3-YUV444\n\t specify '-p' to enable semi-planar mode\n");
 }
 
-int init_SDL(int argc, char *argv[]) {
-  int     opt;
-  int     used_s_opt = 0;
-  Uint32 vflags;
-
-  if (argc == 1) {
-    print_usage();
-    return 1;
-  } else {
-    while((opt = getopt(argc, argv, "f:s:p")) != -1)
-      switch(opt){
-      case 's':
-        if (sscanf(optarg, "%dx%d", &width, &height) != 2) {
-          fprintf(stdout, "No geometry information provided by -s parameter.\n");
-          return 1;
-	}
-	used_s_opt = 1;
-	break;
-      case 'f':
-	if (sscanf(optarg, "%d", &cfidc) != 1 || (cfidc<0 && cfidc>3)) {
-	  fprintf(stdout, "Invalid format provided by -f parameter.\n");
-	  return 1;
-	}
-	break;
-      case 'p':
-        // Enable semi-planar mode
-        sp = 1;
-        break;
-      default:
-	print_usage();
-	return 1;
-	break;
-      }
-  }
-  argv += optind;
-  argc -= optind;
-  
+int init_SDL() {
+  width = WIDTH;
+  height = HEIGHT;
+  cfidc = output_mode == COLOR ? 2 : 0;
   vfilename = "-";
-  
-  if(!used_s_opt) {
-    fprintf(stdout, "No geometry information found in path/filename.\nPlease use -s <width>x<height> paramter.\n");
-    return 1;
-  }
-  // some WM can't handle small windows...
-  if (width < 100){
-    zoom = 2;
-    min_zoom = 2;
-  }
-  //printf("using x=%d y=%d\n", width, height);
-  
+
   // SDL init
   if(SDL_Init(SDL_INIT_VIDEO) < 0){ 
     fprintf(stderr, "Unable to set video mode: %s\n", SDL_GetError());
@@ -268,7 +248,8 @@ int init_SDL(int argc, char *argv[]) {
     {      fprintf(stderr, "SDL ERROR Video query failed: %s\n", SDL_GetError() );
       SDL_Quit(); exit(0); 
     }
-  
+ 
+  Uint32 vflags; 
   bpp = info->vfmt->BitsPerPixel;
   if(info->hw_available)
     vflags = SDL_HWSURFACE;
@@ -298,29 +279,13 @@ int init_SDL(int argc, char *argv[]) {
 
   /* should allocate memory for y_data, cr_data, cb_data here */
   y_data  = malloc(width * height * sizeof(Uint8));
-  if (cfidc > 0)
-    {
-      cb_data = malloc(width * height * sizeof(Uint8) / SubSizeC[cfidc]);
-      cr_data = malloc(width * height * sizeof(Uint8) / SubSizeC[cfidc]);
-      if (1) {
-        tmp_data = malloc(width * height * sizeof(Uint8) * 2);
-        fprintf(stderr, "allocating %d bytes for tmp_data\n", width*height*sizeof(Uint8)*2);
-      }
-    }
-  
-  fprintf(stderr, "opening stdin\n");
-  fpointer = fdopen(0, "rb");
-  if (fpointer == NULL){
-    fprintf(stderr, "Error opening %s\n", vfilename);
-    return 1;
-  }
+  cb_data = malloc(width * height * sizeof(Uint8) / 2);
+  cr_data = malloc(width * height * sizeof(Uint8) / 2);
+  tmp_data = malloc(width * height * sizeof(Uint8) * 2);
+    
   return 0; 
 }
 
-#define WIDTH 640
-extern __u8 target_y, target_u, target_v;
-extern __u8 corner_y, corner_u, corner_v;
-extern int corner_loss_threshold;
 void handle_SDL_events (__u8 *buf, __u8 *losses) {
   while (SDL_PollEvent(&event)) {
     switch(event.type)
@@ -371,13 +336,69 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
           case SDLK_c:
             click_mode = SET_CORNER;
             break;
+
+          case SDLK_0:
+            loss_contrast_booster = 0;
+            break;
+          case SDLK_1:
+            loss_contrast_booster = 1;
+            break;
+          case SDLK_2:
+            loss_contrast_booster = 2;
+            break;
+          case SDLK_3:
+            loss_contrast_booster = 3;
+            break;
+          case SDLK_4:
+            loss_contrast_booster = 4;
+            break;
+          case SDLK_5:
+            loss_contrast_booster = 5;
+            break;
+
+          case SDLK_t:
+            corner_threshold_calibrate = 1 - corner_threshold_calibrate;
+            break;
           case SDLK_UP:
             corner_loss_threshold++;
             break;
           case SDLK_DOWN:
             corner_loss_threshold--;
             break;
-	  default:
+
+          case SDLK_LEFT:
+            switch (output_mode) {
+            case LOSS:
+              output_mode = COLOR;
+              cfidc = 2;
+              loss_contrast_booster = 0;
+              corner_threshold_calibrate = 0;
+              break;
+            case FILTER:
+              output_mode = LOSS;
+              break;
+            default:
+              break;
+            } // switch output_mode
+            break;
+
+          case SDLK_RIGHT:
+            switch (output_mode) {
+            case COLOR:
+              output_mode = LOSS;
+              cfidc = 0;
+              break;
+            case LOSS:
+              output_mode = FILTER;
+              loss_contrast_booster = 0;
+              corner_threshold_calibrate = 0;
+              break;
+            default:
+              break;
+            } // switch output_mode
+            break;
+
+          default:
 	    break;
 	}  // switch key
       default:
@@ -387,7 +408,7 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
   }
 }
 
-int output_SDL (__u8 *buf) {
+int output_SDL (__u8 *image, __u8 *losses, __u8 *filtered) {
   char caption[32];
   switch (click_mode) {
   case SET_BALL:
@@ -402,7 +423,21 @@ int output_SDL (__u8 *buf) {
     SDL_WM_SetCaption("mode: unknown", NULL);
     break;
   }
-  if (load_frame(buf)) return 1;
+
+  switch (output_mode) {
+  case COLOR:
+    if (load_frame(image)) return 1;
+    break;
+  case LOSS:
+    if (load_frame(losses)) return 1;
+    break;
+  case FILTER:
+    if (load_frame(filtered)) return 1;
+    break;
+  default:
+    dprintf(2, "unknown output mode");
+    return 1;
+  }
   draw_frame();
   frame++;
   return 0;
@@ -414,7 +449,6 @@ void cleanup_SDL () {
   free(cb_data);
   free(cr_data);
   free(tmp_data);
-  fclose(fpointer);
 }
 
 #ifdef DUMMY

@@ -5,7 +5,7 @@ CFLAGS     = $(OPTFLAGS)  $(SDL_CFLAGS)
 LDFLAGS    = $(SDL_LIBS) 
 
 CSRC       = yay.c fir.c
-TARGET     = yay
+TARGET     = fir
 OBJ        = $(CSRC:.c=.o)
 
 all: fir
@@ -15,9 +15,6 @@ all: fir
 
 $(TARGET): $(OBJ)
 	$(CC) -o $@ $(OBJ) $(LDFLAGS)
-
-fir: $(OBJ)
-	$(CC) -o fir $(OBJ) $(LDFLAGS)
 
 clean:
 	rm $(OBJ) $(TARGET)

@@ -22,10 +22,6 @@
 #define KERNEL_SIZE         20
 #define AVERAGING_BITSHIFT  8
 
-__u8 target_y = 255;
-__u8 target_u = 128;
-__u8 target_v = 128;
-
 #define CORNER_WIDTH            300
 #define CORNER_HEIGHT           200
 #define CORNER_LOSS_THRESHOLD   corner_loss_threshold
@@ -33,12 +29,21 @@ __u8 target_v = 128;
 #define CORNER_U                corner_u
 #define CORNER_V                corner_v
 
+// globals
+__u8 target_y = 255;
+__u8 target_u = 128;
+__u8 target_v = 128;
+
+int loss_contrast_booster = 0;
+
 __u8 corner_y = 255;
 __u8 corner_u = 128;
 __u8 corner_v = 128;
 int corner_loss_threshold = 12;
+int corner_threshold_calibrate = 0;
 
 int quit = 0;
+// end globals
 
 struct xy {
     int x;
@@ -71,7 +76,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 
                     top_left->x = j + 1;
                     top_left->y = i;
                 }
-                //losses[i*WIDTH + j+1] = 130;
+                if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
             } 
             // only check leftmost pixel if rightmost isn't a match
             else if ((CORNER_Y > image[pix0]   ? CORNER_Y - image[pix0]   : image[pix0]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
@@ -79,7 +84,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 
                     top_left->x = j;
                     top_left->y = i;
                 }
-                //losses[i*WIDTH + j] = 130;
+                if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
             }
         }
     }
@@ -99,7 +104,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 
                     top_right->x = j;
                     top_right->y = i;
                 }
-                //losses[i*WIDTH + j] = 130;
+                if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
             }
             // only check rightmost pixel if leftmost isn't a match
             else if ((CORNER_Y > image[pix1]   ? CORNER_Y - image[pix1]   : image[pix1]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
@@ -107,7 +112,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 
                     top_right->x = j + 1;
                     top_right->y = i;
                 }
-                //losses[i*WIDTH + j+1] = 130;
+                if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
             }
         }
     }
@@ -126,19 +131,21 @@ long loss_function (__u8 *image, __u8 *losses) {
         losses[i >> 1]       = ((TARGET_Y > image[i]   ? TARGET_Y - image[i]   : image[i]   - TARGET_Y) + C_loss) >> 2;
         losses[(i >> 1) + 1] = ((TARGET_Y > image[i+2] ? TARGET_Y - image[i+2] : image[i+2] - TARGET_Y) + C_loss) >> 2;
 	
-        //if (losses[i >> 1] >= 16) {
-	//    losses[i >> 1] = 255;
-	//} else {
-	//    losses[i >> 1] <<= 4;
-	//}
-        //losses[i >> 1] = 255 - losses[i >> 1];
+        if (loss_contrast_booster) {
+            if (losses[i >> 1] >= (256 >> loss_contrast_booster)) {
+	        losses[i >> 1] = 255;
+	    } else {
+	        losses[i >> 1] <<= loss_contrast_booster;
+	    }
+            losses[i >> 1] = 255 - losses[i >> 1];
 
-        //if (losses[(i >> 1) + 1] >= 16) {
-	//    losses[(i >> 1) + 1] = 255;
-	//} else {
-	//    losses[(i >> 1) + 1] <<= 4;
-	//}
-	//losses[(i >> 1) + 1] = 255 - losses[(i >> 1) + 1];
+            if (losses[(i >> 1) + 1] >= (256 >> loss_contrast_booster)) {
+	        losses[(i >> 1) + 1] = 255;
+	    } else {
+	        losses[(i >> 1) + 1] <<= loss_contrast_booster;
+	    }
+	    losses[(i >> 1) + 1] = 255 - losses[(i >> 1) + 1];
+        }
     }
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -210,8 +217,8 @@ int ball_exists(__u8 *losses) {
     return 0;
 }    
 
-int main (int argc, char *argv[]) {
-    init_SDL(argc, argv);
+int main () {
+    init_SDL();
 
     /******************* SET UP IMAGE PROCESSING *******************/
     __u8 losses[WIDTH*HEIGHT];
@@ -397,7 +404,7 @@ int main (int argc, char *argv[]) {
         //dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
         //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
         
-	if (output_SDL(losses)) return -1;
+	if (output_SDL(buf0, losses, filtered)) return -1;
         handle_SDL_events(buf0, losses);
         
 	if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
@@ -439,7 +446,7 @@ int main (int argc, char *argv[]) {
         //dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
         //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
 
-        if (output_SDL(losses)) return -1;
+        if (output_SDL(buf1, losses, filtered)) return -1;
 	handle_SDL_events(buf1, losses);
         
 	if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
