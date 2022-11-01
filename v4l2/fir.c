@@ -28,7 +28,7 @@ __u8 target_v = 128;
 
 #define CORNER_WIDTH            300
 #define CORNER_HEIGHT           200
-#define CORNER_LOSS_THRESHOLD   60
+#define CORNER_LOSS_THRESHOLD   corner_loss_threshold
 #define CORNER_Y                corner_y
 #define CORNER_U                corner_u
 #define CORNER_V                corner_v
@@ -36,6 +36,7 @@ __u8 target_v = 128;
 __u8 corner_y = 255;
 __u8 corner_u = 128;
 __u8 corner_v = 128;
+int corner_loss_threshold = 12;
 
 int quit = 0;
 
@@ -44,7 +45,7 @@ struct xy {
     int y;
 };
 
-long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right) {
+long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 *losses) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
@@ -70,6 +71,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right) {
                     top_left->x = j + 1;
                     top_left->y = i;
                 }
+                //losses[i*WIDTH + j+1] = 130;
             } 
             // only check leftmost pixel if rightmost isn't a match
             else if ((CORNER_Y > image[pix0]   ? CORNER_Y - image[pix0]   : image[pix0]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
@@ -77,6 +79,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right) {
                     top_left->x = j;
                     top_left->y = i;
                 }
+                //losses[i*WIDTH + j] = 130;
             }
         }
     }
@@ -96,6 +99,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right) {
                     top_right->x = j;
                     top_right->y = i;
                 }
+                //losses[i*WIDTH + j] = 130;
             }
             // only check rightmost pixel if leftmost isn't a match
             else if ((CORNER_Y > image[pix1]   ? CORNER_Y - image[pix1]   : image[pix1]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
@@ -103,6 +107,7 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right) {
                     top_right->x = j + 1;
                     top_right->y = i;
                 }
+                //losses[i*WIDTH + j+1] = 130;
             }
         }
     }
@@ -128,7 +133,7 @@ long loss_function (__u8 *image, __u8 *losses) {
 	//}
         //losses[i >> 1] = 255 - losses[i >> 1];
 
-	//if (losses[(i >> 1) + 1] >= 16) {
+        //if (losses[(i >> 1) + 1] >= 16) {
 	//    losses[(i >> 1) + 1] = 255;
 	//} else {
 	//    losses[(i >> 1) + 1] <<= 4;
@@ -194,12 +199,14 @@ long argmin (__u8 *filtered, struct xy *pos) {
 int ball_exists(__u8 *losses) {
     int num_pixels = 0;
     int i;
-    int threshold = 253; //will decide once we have painted ball
-    int expected_pixels = 1000; //will decide once we have painted ball
+    int threshold = 12; //will decide once we have painted ball
+    int expected_pixels = 300; //will decide once we have painted ball
     for (i = 0; i < HEIGHT * WIDTH; i++) {
-	if (losses[i] > threshold) num_pixels++;
+        if (losses[i] < threshold) num_pixels++;
     }
+    //dprintf(2, "num of ball pixels found: %d\n", num_pixels);
     if (num_pixels > expected_pixels) return 1;
+
     return 0;
 }    
 
@@ -351,6 +358,7 @@ int main (int argc, char *argv[]) {
     
     // main loop: dequeue, process, then re-enqueue each buffer until q is pressed
     int last_ms = 0;
+    struct xy prev_vel, this_vel, prev_pos;
     struct xy ball_pos, top_left, top_right;
     struct timespec start_time, end_time;
     while (!quit) {
@@ -364,15 +372,26 @@ int main (int argc, char *argv[]) {
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
         loss_function(buf0, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(buf0, losses) / 1000000);
             
-        if (1) { //(ball_exists(losses)) {
+        if (1) {//(ball_exists(losses)) {
             filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
             argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
-            find_corners(buf0, &top_left, &top_right);
+            find_corners(buf0, &top_left, &top_right, losses); //dprintf(2, "corner time (ms): %ld\n", find_corners(buf0, &top_left, &top_right) / 1000000);
             losses[top_left.x + WIDTH*top_left.y] = 0xFF;
             losses[top_right.x + WIDTH*top_right.y] = 0xFF;
+            if (prev_pos.x != 0 && prev_pos.y != 0) {
+                this_vel.x = ball_pos.x - prev_pos.x;
+                this_vel.y = ball_pos.y - prev_pos.y; 
+            } 
+            prev_vel.x = this_vel.x;
+            prev_vel.y = this_vel.y;
+            prev_pos.x = ball_pos.x;
+            prev_pos.y = ball_pos.y;
 	} else {
-	    ball_pos.x = -1;
-	    ball_pos.y = -1;
+	    ball_pos.x = prev_pos.x + prev_vel.x;
+            ball_pos.y = prev_pos.y + prev_vel.y;
+            filtered[WIDTH * ball_pos.y + ball_pos.x] = 0xFF;
+            this_vel = prev_vel;
+	    prev_pos = ball_pos;
 	}
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
         //dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
@@ -398,13 +417,22 @@ int main (int argc, char *argv[]) {
         
 	if (1) { //(ball_exists(losses)) {
             filter(losses, filtered); // dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
-            argmin(filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
-	    find_corners(buf1, &top_left, &top_right);
+            argmin(filtered, &ball_pos); // dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000); 
+            find_corners(buf0, &top_left, &top_right, losses); // dprintf(2, "corner time (ms): %ld\n", find_corners(buf0, &top_left, &top_right) / 1000000);
             losses[top_left.x + WIDTH*top_left.y] = 0xFF;
             losses[top_right.x + WIDTH*top_right.y] = 0xFF;
-        } else {
- 	    ball_pos.x = -1;
-	    ball_pos.y = -1;
+            if(prev_pos.x != 0 && prev_pos.y != 0) {
+                this_vel.x = ball_pos.x - prev_pos.x;
+                this_vel.y = ball_pos.y - prev_pos.y;
+            }
+            prev_vel = this_vel;
+            prev_pos = ball_pos;
+        } else { //estimate using previous pos and vel
+ 	    ball_pos.x = prev_pos.x + prev_vel.x;
+	    ball_pos.y = prev_pos.y + prev_vel.y;
+            filtered[WIDTH * ball_pos.y + ball_pos.x] = 0xFF;
+            this_vel = prev_vel; //no new measurements so velocity didnt change
+            prev_pos = ball_pos;
 	}
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
 

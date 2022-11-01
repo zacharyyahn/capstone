@@ -320,6 +320,7 @@ int init_SDL(int argc, char *argv[]) {
 #define WIDTH 640
 extern __u8 target_y, target_u, target_v;
 extern __u8 corner_y, corner_u, corner_v;
+extern int corner_loss_threshold;
 void handle_SDL_events (__u8 *buf, __u8 *losses) {
   while (SDL_PollEvent(&event)) {
     switch(event.type)
@@ -370,6 +371,12 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
           case SDLK_c:
             click_mode = SET_CORNER;
             break;
+          case SDLK_UP:
+            corner_loss_threshold++;
+            break;
+          case SDLK_DOWN:
+            corner_loss_threshold--;
+            break;
 	  default:
 	    break;
 	}  // switch key
@@ -381,12 +388,15 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
 }
 
 int output_SDL (__u8 *buf) {
+  char caption[32];
   switch (click_mode) {
   case SET_BALL:
-    SDL_WM_SetCaption("mode: set ball color", NULL);
+    sprintf(caption, "mode: ball, threshold: %d", corner_loss_threshold);
+    SDL_WM_SetCaption(caption, NULL);
     break;
   case SET_CORNER:
-    SDL_WM_SetCaption("mode: set corner color", NULL);
+    sprintf(caption, "mode: corner, threshold: %d", corner_loss_threshold);
+    SDL_WM_SetCaption(caption, NULL);
     break;
   default:
     SDL_WM_SetCaption("mode: unknown", NULL);
