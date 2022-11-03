@@ -40,7 +40,7 @@
 
 // globals
 #define WIDTH 640
-#define HEIGHT 640
+#define HEIGHT 480
 extern __u8 target_y;
 extern __u8 target_u;
 extern __u8 target_v;

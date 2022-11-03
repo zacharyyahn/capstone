@@ -401,12 +401,12 @@ int main () {
         last_ms = cur_buf->timestamp.tv_usec/1000;
 
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-        loss_function(cur_buf->m.userptr, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(cur_buf->m.userptr, losses) / 1000000);
+        loss_function((__u8 *) cur_buf->m.userptr, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(cur_buf->m.userptr, losses) / 1000000);
 
         if (1) {//(ball_exists(losses)) {
             filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
             argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
-            find_corners(cur_buf->m.userptr, &top_left, &top_right, losses); //dprintf(2, "corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
+            find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); //dprintf(2, "corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
             relative_position(&top_left, &top_right, &ball_pos, &rel_pos);
             dprintf(2, "found relative ball position (%f, %f)\n", rel_pos.x, rel_pos.y);
             losses[top_left.x + WIDTH*top_left.y] = 0xFF;
@@ -430,8 +430,8 @@ int main () {
         //dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
         //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
 
-	    if (output_SDL(cur_buf->m.userptr, losses, filtered)) return -1;
-        handle_SDL_events(cur_buf->m.userptr, losses);
+	    if (output_SDL((__u8 *) cur_buf->m.userptr, losses, filtered)) return -1;
+            handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
 
 	    if (ioctl(v0, VIDIOC_QBUF, cur_buf)) {
             perror("error enqueueing buffer 0");
