@@ -29,7 +29,8 @@
 #define CORNER_U                corner_u
 #define CORNER_V                corner_v
 
-#define TABLE_LENGTH            300.0   // mm
+#define TABLE_LENGTH            396.0   // mm
+#define MAX_INTERPOLATED_FRAMES 3
 
 // globals
 __u8 target_y = 255;
@@ -38,6 +39,10 @@ __u8 target_v = 128;
 
 int loss_contrast_booster = 0;
 
+int ball_exists_loss_threshold = 8;
+int ball_exists_expected_pixels = 150;
+int ball_exists_calibrate = 0;
+
 __u8 corner_y = 255;
 __u8 corner_u = 128;
 __u8 corner_v = 128;
@@ -45,6 +50,7 @@ int corner_loss_threshold = 12;
 int corner_threshold_calibrate = 0;
 
 int quit = 0;
+int do_output = 1;
 // end globals
 
 struct xy {
@@ -56,6 +62,21 @@ struct xyf {
     float x;
     float y;
 };
+
+int ball_exists(__u8 *losses) {
+    int num_pixels = 0;
+    int i;
+    for (i = 0; i < HEIGHT * WIDTH; i++) {
+        if (losses[i] < ball_exists_loss_threshold) {
+            num_pixels++;
+            if (ball_exists_calibrate) losses[i] = 0xFF;
+        }
+    }
+    if (ball_exists_calibrate) dprintf(2, "num of ball pixels found: %d\n", num_pixels);
+    if (num_pixels >= ball_exists_expected_pixels) return 1;
+
+    return 0;
+}
 
 long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 *losses) {
     struct timespec start_time, end_time;
@@ -124,6 +145,9 @@ long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 
         }
     }
 
+    losses[top_left->x + WIDTH*top_left->y] = 0xFF;
+    losses[top_right->x + WIDTH*top_right->y] = 0xFF;
+
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
@@ -156,22 +180,6 @@ long loss_function (__u8 *image, __u8 *losses) {
     }
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
-}
-
-//Detect if a ball exists based on how many pixels have a loss greater than
-//253 when using inverted loss (255 is the best, 0 is the worst)
-int ball_exists(__u8 *losses) {
-    int num_pixels = 0;
-    int i;
-    int threshold = 12; //will decide once we have painted ball
-    int expected_pixels = 300; //will decide once we have painted ball
-    for (i = 0; i < HEIGHT * WIDTH; i++) {
-        if (losses[i] < threshold) num_pixels++;
-    }
-    //dprintf(2, "num of ball pixels found: %d\n", num_pixels);
-    if (num_pixels > expected_pixels) return 1;
-
-    return 0;
 }
 
 long filter (__u8 *losses, __u8 *filtered) {
@@ -387,53 +395,62 @@ int main () {
 
     // main loop: dequeue, process, then re-enqueue each buffer until q is pressed
     struct v4l2_buffer *cur_buf;
-    int last_ms = 0;
-    struct xy prev_vel, this_vel, prev_pos;
+    struct timeval prev_timestamp;
+    int prev_framecount = -1;
+    int dt, d_framecount;
     struct xy ball_pos, top_left, top_right;
     struct xyf rel_pos;
+    struct xyf vel, prev_pos;
+    int have_prev_pos = 0;
+    int interpolated_frames = 0;
     struct timespec start_time, end_time;
     for (cur_buf = &bs0; !quit; cur_buf = (cur_buf == &bs0) ? &bs1 : &bs0) {
         if (ioctl(v0, VIDIOC_DQBUF, cur_buf)) {
             perror("error dequeueing buffer");
             return -1;
         }
-        //dprintf(2, "dt from camera: %ld\n", cur_buf->timestamp.tv_usec/1000-last_ms);
-        last_ms = cur_buf->timestamp.tv_usec/1000;
+        d_framecount = cur_buf->sequence - prev_framecount;
+        dt = (cur_buf->timestamp.tv_sec - prev_timestamp.tv_sec)*1000000 + (cur_buf->timestamp.tv_usec - prev_timestamp.tv_usec);
+        prev_framecount = cur_buf->sequence;
+        prev_timestamp = cur_buf->timestamp;
+        // dprintf(2, "d_framecount = %d\tdt = %d\n", d_framecount, dt/1000);
 
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
         loss_function((__u8 *) cur_buf->m.userptr, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(cur_buf->m.userptr, losses) / 1000000);
 
-        if (1) {//(ball_exists(losses)) {
+        if (ball_exists(losses)) {
             filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
             argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
             find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); //dprintf(2, "corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
-            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);
-            dprintf(2, "found relative ball position (%f, %f)\n", rel_pos.x, rel_pos.y);
-            losses[top_left.x + WIDTH*top_left.y] = 0xFF;
-            losses[top_right.x + WIDTH*top_right.y] = 0xFF;
-            if (prev_pos.x != 0 && prev_pos.y != 0) {
-                this_vel.x = ball_pos.x - prev_pos.x;
-                this_vel.y = ball_pos.y - prev_pos.y;
+            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);  dprintf(2, "frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
+            if (have_prev_pos) {
+                vel.x = (rel_pos.x - prev_pos.x) / dt;  // units are mm/us
+                vel.y = (rel_pos.y - prev_pos.y) / dt;
             }
-            prev_vel.x = this_vel.x;
-            prev_vel.y = this_vel.y;
-            prev_pos.x = ball_pos.x;
-            prev_pos.y = ball_pos.y;
-	    } else {
-	        ball_pos.x = prev_pos.x + prev_vel.x;
-            ball_pos.y = prev_pos.y + prev_vel.y;
-            filtered[WIDTH * ball_pos.y + ball_pos.x] = 0xFF;
-            this_vel = prev_vel;
-	        prev_pos = ball_pos;
-	    }
-	    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-        //dprintf(2, "ball pos: (%d, %d)\ttotal calculation time (ms): %ld\n", ball_pos.x, ball_pos.y, (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+            prev_pos = rel_pos;
+            have_prev_pos = 1;
+            interpolated_frames = 0;
+	} else if (interpolated_frames < MAX_INTERPOLATED_FRAMES) {
+	    // assume velocity is unchanged
+            rel_pos.x = prev_pos.x + vel.x * dt;
+            rel_pos.y = prev_pos.y + vel.y * dt;
+            dprintf(2, "frame %d\tinterpolated ball position: (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
+	    prev_pos = rel_pos;
+            have_prev_pos = 1;
+            interpolated_frames++;
+	} else {
+            have_prev_pos = 0;
+            // dprintf(2, "frame %d\tno ball position found\n", cur_buf->sequence);
+        }
+
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+        //dprintf(2, "total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
         //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
 
-	    if (output_SDL((__u8 *) cur_buf->m.userptr, losses, filtered)) return -1;
-            handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
+	if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, filtered)) return -1;
+        handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
 
-	    if (ioctl(v0, VIDIOC_QBUF, cur_buf)) {
+	if (ioctl(v0, VIDIOC_QBUF, cur_buf)) {
             perror("error enqueueing buffer 0");
             return -1;
         }

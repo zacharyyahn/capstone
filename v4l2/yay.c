@@ -47,6 +47,9 @@ extern __u8 target_v;
 
 extern int loss_contrast_booster;
 
+extern int ball_exists_loss_threshold;
+extern int ball_exists_calibrate;
+
 extern __u8 corner_y;
 extern __u8 corner_u;
 extern __u8 corner_v;
@@ -54,6 +57,7 @@ extern int corner_loss_threshold;
 extern int corner_threshold_calibrate;
 
 extern int quit;
+extern int do_output;
 // end globals
 
 typedef enum {
@@ -317,6 +321,9 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
             case SDLK_q:
                 quit = 1;
                 break;
+            case SDLK_SPACE:
+                do_output = 1 - do_output;
+                break;
             case SDLK_b:
                 click_mode = SET_BALL;
                 break;
@@ -345,12 +352,18 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
 
             case SDLK_t:
                 corner_threshold_calibrate = 1 - corner_threshold_calibrate;
+                ball_exists_calibrate = 0;
                 break;
+            case SDLK_e:
+                ball_exists_calibrate = 1 - ball_exists_calibrate;
+                corner_threshold_calibrate = 0;
             case SDLK_UP:
-                corner_loss_threshold++;
+                if (corner_threshold_calibrate) corner_loss_threshold++;
+                if (ball_exists_calibrate) ball_exists_loss_threshold++;
                 break;
             case SDLK_DOWN:
-                corner_loss_threshold--;
+                if (corner_threshold_calibrate) corner_loss_threshold--;
+                if (ball_exists_calibrate) ball_exists_loss_threshold--;
                 break;
 
             case SDLK_LEFT:
@@ -396,13 +409,14 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
 
 int output_SDL (__u8 *image, __u8 *losses, __u8 *filtered) {
     char caption[32];
+    int threshold = corner_threshold_calibrate ? corner_loss_threshold : ball_exists_loss_threshold;
     switch (click_mode) {
     case SET_BALL:
-        sprintf(caption, "mode: ball, threshold: %d", corner_loss_threshold);
+        sprintf(caption, "mode: ball, threshold: %d", threshold);
         SDL_WM_SetCaption(caption, NULL);
         break;
     case SET_CORNER:
-        sprintf(caption, "mode: corner, threshold: %d", corner_loss_threshold);
+        sprintf(caption, "mode: corner, threshold: %d", threshold);
         SDL_WM_SetCaption(caption, NULL);
         break;
     default:
