@@ -40,14 +40,14 @@ __u8 target_v = 128;
 
 int loss_contrast_booster = 0;
 
-int ball_exists_loss_threshold = 8;
-int ball_exists_expected_pixels = 150;
+int ball_exists_loss_threshold = 12;
+int ball_exists_expected_pixels = 50;
 int ball_exists_calibrate = 0;
 
 __u8 corner_y = 255;
 __u8 corner_u = 128;
 __u8 corner_v = 128;
-int corner_loss_threshold = 12;
+int corner_loss_threshold = 20;
 int corner_threshold_calibrate = 0;
 
 int quit = 0;
@@ -64,19 +64,48 @@ struct xyf {
     float y;
 };
 
-int ball_exists(__u8 *losses) {
+int ball_exists(__u8 *losses, __u8 *exists) {
     int num_pixels = 0;
     int i;
     for (i = 0; i < HEIGHT * WIDTH; i++) {
         if (losses[i] < ball_exists_loss_threshold) {
             num_pixels++;
-            if (ball_exists_calibrate) losses[i] = 0xFF;
+            if (1 /*ball_exists_calibrate*/ ) exists[i] = 0x80;
+        } else {
+            if (1 /*ball_exists_calibrate*/ ) exists[i] = 0x00;
         }
     }
     if (ball_exists_calibrate) dprintf(2, "num of ball pixels found: %d\n", num_pixels);
     if (num_pixels >= ball_exists_expected_pixels) return 1;
 
     return 0;
+}
+
+/**
+ * lots of redundant code with ball_exists in here, these should probably be combined if we go
+ * with this approach. Just wanted to keep things separate for initial testing
+ */
+long find_center(__u8 *exists, struct xyf *ball_pos) {
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+
+    int num_pixels = 0;
+    int x_sum = 0, y_sum = 0;
+    int i;
+    for (i = 0; i < HEIGHT * WIDTH; i++) {
+        if (exists[i] > 0) {
+            num_pixels++;
+            x_sum += i % WIDTH;
+            y_sum += i / WIDTH;
+        }
+    }
+    ball_pos->x = ((float) x_sum) / num_pixels;
+    ball_pos->y = ((float) y_sum) / num_pixels;
+
+    exists[(int) ball_pos->x + (int) ball_pos->y * WIDTH] = 0xFF;
+
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
 long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 *losses) {
@@ -233,7 +262,7 @@ long argmin (__u8 *filtered, struct xy *pos) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
-long relative_position (struct xy *top_left, struct xy *top_right, struct xy *ball_pos, struct xyf *rel_pos) {
+long relative_position (struct xy *top_left, struct xy *top_right, struct xyf *ball_pos, struct xyf *rel_pos) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
@@ -254,6 +283,8 @@ int main () {
     /******************* SET UP IMAGE PROCESSING *******************/
     __u8 losses[WIDTH*HEIGHT];
     memset(&losses, 0, sizeof(losses));
+    __u8 exists[WIDTH*HEIGHT];
+    memset(&exists, 0, sizeof(exists));
     __u8 filtered[WIDTH*HEIGHT];
     memset(&filtered, 0xFF, sizeof(filtered));
 
@@ -399,9 +430,10 @@ int main () {
     struct timeval prev_timestamp;
     int prev_framecount = -1;
     int dt, d_framecount;
-    struct xy ball_pos, top_left, top_right;
-    struct xyf rel_pos;
+    struct xy top_left, top_right;
+    struct xyf ball_pos, rel_pos;
     struct xyf vel, prev_pos;
+    BallState b;
     int have_prev_pos = 0;
     int interpolated_frames = 0;
     struct timespec start_time, end_time;
@@ -419,9 +451,10 @@ int main () {
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
         loss_function((__u8 *) cur_buf->m.userptr, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(cur_buf->m.userptr, losses) / 1000000);
 
-        if (ball_exists(losses)) {
-            filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
-            argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
+        if (ball_exists(losses, exists)) {
+            //filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
+            //argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
+            find_center(exists, &ball_pos);
             find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); //dprintf(2, "corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
             relative_position(&top_left, &top_right, &ball_pos, &rel_pos);  dprintf(2, "frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
             if (have_prev_pos) {
@@ -446,17 +479,16 @@ int main () {
         
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-        //dprintf(2, "total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        dprintf(2, "total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
         //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
 
-    BallState b;
-    b.x = rel_pos.x;
-    b.y = rel_pos.y;
-    b.v_x = vel.x;
-    b.v_y = vel.y;
-    plan_rod_movement(b);
+        b.x = rel_pos.x;
+        b.y = rel_pos.y;
+        b.v_x = vel.x;
+        b.v_y = vel.y;
+        plan_rod_movement(b);
 
-	if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, filtered)) return -1;
+	if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, exists)) return -1;
         handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
 
 	if (ioctl(v0, VIDIOC_QBUF, cur_buf)) {

@@ -357,6 +357,8 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
             case SDLK_e:
                 ball_exists_calibrate = 1 - ball_exists_calibrate;
                 corner_threshold_calibrate = 0;
+                loss_contrast_booster = 0;
+                break;
             case SDLK_UP:
                 if (corner_threshold_calibrate) corner_loss_threshold++;
                 if (ball_exists_calibrate) ball_exists_loss_threshold++;
@@ -373,6 +375,7 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                     cfidc = 2;
                     loss_contrast_booster = 0;
                     corner_threshold_calibrate = 0;
+                    ball_exists_calibrate = 0;
                     break;
                 case FILTER:
                     output_mode = LOSS;
@@ -392,6 +395,7 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                     output_mode = FILTER;
                     loss_contrast_booster = 0;
                     corner_threshold_calibrate = 0;
+                    // ball_exists_calibrate = 0;
                     break;
                 default:
                     break;
