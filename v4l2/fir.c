@@ -8,6 +8,7 @@
 #include <time.h>
 #include "videodev2.h"
 #include "yay.h"
+#include "plan.h"
 
 #define WIDTH                   640
 #define HEIGHT                  480
@@ -442,10 +443,18 @@ int main () {
             have_prev_pos = 0;
             // dprintf(2, "frame %d\tno ball position found\n", cur_buf->sequence);
         }
+        
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
         //dprintf(2, "total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
         //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
+
+    BallState b;
+    b.x = rel_pos.x;
+    b.y = rel_pos.y;
+    b.v_x = vel.x;
+    b.v_y = vel.y;
+    plan_rod_movement(b);
 
 	if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, filtered)) return -1;
         handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);

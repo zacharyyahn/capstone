@@ -4,7 +4,7 @@ SDL_CFLAGS = `sdl-config --cflags`
 CFLAGS     = $(OPTFLAGS)  $(SDL_CFLAGS)
 LDFLAGS    = $(SDL_LIBS) 
 
-CSRC       = yay.c fir.c
+CSRC       = yay.c fir.c plan.c
 TARGET     = fir
 OBJ        = $(CSRC:.c=.o)
 
