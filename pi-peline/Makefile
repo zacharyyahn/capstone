@@ -4,11 +4,11 @@ SDL_CFLAGS = `sdl-config --cflags`
 CFLAGS     = $(OPTFLAGS)  $(SDL_CFLAGS)
 LDFLAGS    = $(SDL_LIBS) 
 
-CSRC       = yay.c fir.c plan.c
-TARGET     = fir
+CSRC       = yay.c vision.c plan.c
+TARGET     = pi
 OBJ        = $(CSRC:.c=.o)
 
-all: fir
+all: $(TARGET)
 
 %.o: %.c
 	$(CC) $(CFLAGS)  -c -o $@ $<

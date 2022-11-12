@@ -132,6 +132,6 @@ dmypy.json
 .vscode
 
 # binaries and object files
-v4l2/fir
+pi-peline/pi
 *.o
 
