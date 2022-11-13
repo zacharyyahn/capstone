@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <time.h>
 #include "videodev2.h"
+#include "table.h"
 #include "yay.h"
 #include "plan.h"
 
@@ -30,7 +31,6 @@
 #define CORNER_U                corner_u
 #define CORNER_V                corner_v
 
-#define TABLE_LENGTH            396.0   // mm
 #define MAX_INTERPOLATED_FRAMES 3
 
 // globals
@@ -75,7 +75,7 @@ int ball_exists(__u8 *losses, __u8 *exists) {
             if (1 /*ball_exists_calibrate*/ ) exists[i] = 0x00;
         }
     }
-    if (ball_exists_calibrate) dprintf(2, "num of ball pixels found: %d\n", num_pixels);
+    if (ball_exists_calibrate) printf("num of ball pixels found: %d\n", num_pixels);
     if (num_pixels >= ball_exists_expected_pixels) return 1;
 
     return 0;
@@ -279,6 +279,7 @@ long relative_position (struct xy *top_left, struct xy *top_right, struct xyf *b
 
 int main () {
     init_SDL();
+    init_plan();
 
     /******************* SET UP IMAGE PROCESSING *******************/
     __u8 losses[WIDTH*HEIGHT];
@@ -365,7 +366,7 @@ int main () {
     if (ioctl(v0, VIDIOC_S_PARM, &parms)) {
         perror("error setting stream params");
     }
-    dprintf(2, "stream capabilites: %#06x\ttimeperframe: %d/%d\n",
+    printf("stream capabilites: %#06x\ttimeperframe: %d/%d\n",
             parms.parm.capture.capability, parms.parm.capture.timeperframe.numerator, parms.parm.capture.timeperframe.denominator);
 
 
@@ -379,8 +380,8 @@ int main () {
         perror("error requesting buffers");
         return -1;
     }
-    dprintf(2, "buffer capabilities: %#010x\n", req.capabilities);
-    dprintf(2, "driver allocated %d buffers\n", req.count);
+    printf("buffer capabilities: %#010x\n", req.capabilities);
+    printf("driver allocated %d buffers\n", req.count);
 
 
     /******************* BUFFER 0 SETUP *******************/
@@ -433,7 +434,7 @@ int main () {
     struct xy top_left, top_right;
     struct xyf ball_pos, rel_pos;
     struct xyf vel, prev_pos;
-    BallState b;
+    struct ball_state b;
     int have_prev_pos = 0;
     int interpolated_frames = 0;
     struct timespec start_time, end_time;
@@ -446,17 +447,17 @@ int main () {
         dt = (cur_buf->timestamp.tv_sec - prev_timestamp.tv_sec)*1000000 + (cur_buf->timestamp.tv_usec - prev_timestamp.tv_usec);
         prev_framecount = cur_buf->sequence;
         prev_timestamp = cur_buf->timestamp;
-        // dprintf(2, "d_framecount = %d\tdt = %d\n", d_framecount, dt/1000);
+        // printf("d_framecount = %d\tdt = %d\n", d_framecount, dt/1000);
 
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-        loss_function((__u8 *) cur_buf->m.userptr, losses); // dprintf(2, "loss function time (ms): %d\t", loss_function(cur_buf->m.userptr, losses) / 1000000);
+        loss_function((__u8 *) cur_buf->m.userptr, losses); // printf("loss function time (ms): %d\t", loss_function(cur_buf->m.userptr, losses) / 1000000);
 
         if (ball_exists(losses, exists)) {
-            //filter(losses, filtered); //dprintf(2, "filter time (ms): %d\t", filter(losses, filtered) / 1000000);
-            //argmin(filtered, &ball_pos); //dprintf(2, "argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
+            //filter(losses, filtered); //printf("filter time (ms): %d\t", filter(losses, filtered) / 1000000);
+            //argmin(filtered, &ball_pos); //printf("argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
             find_center(exists, &ball_pos);
-            find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); //dprintf(2, "corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
-            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);  dprintf(2, "frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
+            find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); //printf("corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
+            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);  printf("frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
             if (have_prev_pos) {
                 vel.x = (rel_pos.x - prev_pos.x) / dt;  // units are mm/us
                 vel.y = (rel_pos.y - prev_pos.y) / dt;
@@ -468,25 +469,25 @@ int main () {
 	    // assume velocity is unchanged
             rel_pos.x = prev_pos.x + vel.x * dt;
             rel_pos.y = prev_pos.y + vel.y * dt;
-            dprintf(2, "frame %d\tinterpolated ball position: (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
+            printf("frame %d\tinterpolated ball position: (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
 	    prev_pos = rel_pos;
             have_prev_pos = 1;
             interpolated_frames++;
 	} else {
             have_prev_pos = 0;
-            // dprintf(2, "frame %d\tno ball position found\n", cur_buf->sequence);
+            // printf("frame %d\tno ball position found\n", cur_buf->sequence);
         }
         
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-        dprintf(2, "total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
-        //dprintf(2, "top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
+        printf("total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        //printf("top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
 
         b.x = rel_pos.x;
         b.y = rel_pos.y;
-        b.v_x = vel.x;
-        b.v_y = vel.y;
-        plan_rod_movement(b);
+        b.v_x = vel.x * 1000000;  // convert velocity to mm/s
+        b.v_y = vel.y * 1000000;
+        plan_rod_movement(&b, have_prev_pos);
 
 	if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, exists)) return -1;
         handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);

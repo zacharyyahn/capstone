@@ -137,7 +137,7 @@ int load_frame(__u8 *buf){
         }
         return 0;
     } else {
-        dprintf(2, "I don't know how to print this -f option D:\n");
+        printf("I don't know how to print this -f option D:\n");
         return 1;
     }
 }
@@ -291,13 +291,13 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                     target_y = buf[pixel_i << 1];
                     target_u = buf[(color_i << 1) + 1];
                     target_v = buf[(color_i << 1) + 3];
-                    dprintf(2, "setting target YUV to %d, %d, %d\n", target_y, target_u, target_v);
+                    printf("setting target YUV to %d, %d, %d\n", target_y, target_u, target_v);
                     break;
                 case SET_CORNER:
                     corner_y = buf[pixel_i << 1];
                     corner_u = buf[(color_i << 1) + 1];
                     corner_v = buf[(color_i << 1) + 3];
-                    dprintf(2, "setting corner YUV to %d, %d, %d\n", corner_y, corner_u, corner_v);
+                    printf("setting corner YUV to %d, %d, %d\n", corner_y, corner_u, corner_v);
                     break;
                 default:
                     break;
@@ -305,9 +305,9 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
             } else if (event.button.button == SDL_BUTTON_RIGHT) {
                 int pixel_i = event.button.y*WIDTH + event.button.x;
                 int color_i = (pixel_i & 0x0001) == 0 ? pixel_i : pixel_i-1;
-                dprintf(2, "pixel coordinates: (%d, %d)\n", event.button.x, event.button.y);
-                dprintf(2, "pixel YUV values are %d, %d, %d\n", buf[pixel_i << 1], buf[(color_i << 1) + 1], buf[(color_i << 1) + 3]);
-                dprintf(2, "pixel loss value is %d\n", losses[pixel_i]);
+                printf("pixel coordinates: (%d, %d)\n", event.button.x, event.button.y);
+                printf("pixel YUV values are %d, %d, %d\n", buf[pixel_i << 1], buf[(color_i << 1) + 1], buf[(color_i << 1) + 3]);
+                printf("pixel loss value is %d\n", losses[pixel_i]);
             }
             break;
         case SDL_QUIT:
@@ -439,7 +439,7 @@ int output_SDL (__u8 *image, __u8 *losses, __u8 *filtered) {
         if (load_frame(filtered)) return 1;
         break;
     default:
-        dprintf(2, "unknown output mode");
+        printf("unknown output mode");
         return 1;
     }
     draw_frame();

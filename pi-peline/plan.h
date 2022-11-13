@@ -1,39 +1,55 @@
+#ifndef PLAN_H
+#define PLAN_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <linux/types.h>
+#include "table.h"
 
-#define MAX_PLAYERS 3
-#define N_PLAYER_SETS 2
+// in mm/s
+#define MAX_ONCOMING_SHOOT_SPEED        100.0
 
-#define RLIM_INFINITY 100000
+typedef enum {
+    BLOCK,
+    READY,
+    SHOOT,
+    FANCY_SHOOT,
+    SPIN,
+} rotational_state;
 
-// x measured as center player's x position
-typedef struct PlayerSetState {
+struct rod {
     // constants
     float x; // fixed x pos
-    float y_min; // minimum possible y pos
-    float y_max; // maximum possible y pos
-    float range;
-    float num_players; // number of players in the player set
-    float players[MAX_PLAYERS]; // relative positions of the players relative to the origin (top left)
-                                // eg. [0, 2.8, 5.6] where there are 3 players and 2.8 apart
+    float travel;
+    int num_players; // number of players in the player set
+    float player_base[PLAYERS_PER_ROD]; // position of the players at one extreme positioning
+                                    // range of player values are player_base[i] to player_base[i] + travel
 
     // updated variables
-    float y; // current *actual* y pos
-    float y_desired; // current *desired/output* x pos
-} PlayerSetState;
+    
+    // current *desired/output* y pos, measured as the 0th (top) player's position in real
+    // space / table coordinates. This can be converted into something sensible for the MSP
+    // to understand later
+    float y;
 
-typedef struct BallState {
+    // action state of the rotational motor
+    rotational_state rot_state;
+};
+
+struct ball_state {
     float x;
     float y;
     float v_x;
     float v_y;
-} BallState;
+};
 
-float time_to_move(float dist);
+void init_plan();
 
 void plot_player_pos(__u8* filtered, int rod_num, float rod_pos);
 
-void plan_rod_movement(BallState b);
+void plan_rod_movement(struct ball_state *b, int have_ball_pos);
 
-void print_players(PlayerSetState p, int rod_num);
+void print_players(struct rod *r, int rod_num);
+
+#endif
+
