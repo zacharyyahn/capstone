@@ -29,7 +29,7 @@ int main(void)
 
     Clock_Init48MHz();
     PWM_Init();
-    PWM_SetDutyLDef(10000);
+    SetDuty_LDef(10000);
     EnableInterrupts();
 
     while (1) {
