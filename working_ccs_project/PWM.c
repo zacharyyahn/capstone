@@ -7,11 +7,12 @@ void PWM_Init () {
 
     // P6.0 -> LDef_IN1, P6.1 -> LDef_IN2
     // P6.4 -> LOff_IN1, P6.5 -> LOff_IN2
-    // Sets as output, port 6 uses CCR1
+    // Sets as output
     LINEAR_CONTROL_PORT->DIR |= LDEF_IN1_BIT | LDEF_IN2_BIT | LOFF_IN1_BIT | LOFF_IN2_BIT;
 
     // P4.0 -> RDef_IN1, P4.1 -> RDef_IN2
     // P4.2 -> ROff_IN1, P4.2 -> ROff_IN2
+    // Sets as output
     ROTATIONAL_CONTROL_PORT->DIR |= RDEF_IN1_BIT | RDEF_IN2_BIT | ROFF_IN1_BIT | ROFF_IN2_BIT;
 
     // Configure as IO
@@ -21,7 +22,8 @@ void PWM_Init () {
     ROTATIONAL_CONTROL_PORT->SEL0 &= ~(RDEF_IN1_BIT | RDEF_IN2_BIT | ROFF_IN1_BIT | ROFF_IN2_BIT);
     ROTATIONAL_CONTROL_PORT->SEL1 &= ~(RDEF_IN1_BIT | RDEF_IN2_BIT | ROFF_IN1_BIT | ROFF_IN2_BIT);
 
-    // Configure TimerA0
+    // Halt timer A and configure
+    TIMER_A0->CTL = TIMER_A_CTL_MC_0;
     TIMER_A0->CCR[0] = 11999;  // sets CCR0 to period - 1
 
 
@@ -43,11 +45,8 @@ void PWM_Init () {
     TIMER_A0->CCR[RDEF_CCR_INDEX] = 0x0000;
     TIMER_A0->CCR[ROFF_CCR_INDEX] = 0x0000;
 
-    // bit9-8 = 10 to set SMCLK, bit5-4 = 01 to set up mode
-    TIMER_A0->CTL = TIMER_A_CTL_TASSEL_2 | TIMER_A_CTL_MC_1;
-
     // Enable interrupt 9 and 8 for timer A0 CCR0 and TAIFG; datasheet (p. 118)
-    NVIC->ISER[0] |= (TA0_N_IRQn | TA0_0_IRQn);
+    NVIC->ISER[0] |= 0x00000300;
     // Priority set in top three bits of register
     NVIC->IP[TA0_N_IRQn] = (0x04 << 5);
     NVIC->IP[TA0_0_IRQn] = (0x04 << 5);
@@ -57,6 +56,12 @@ void PWM_Init () {
     SetDir_LOff(FORWARD);
     SetDir_RDef(FORWARD);
     SetDir_ROff(FORWARD);
+
+    // bit9-8 = 10 to set SMCLK, bit5-4 = 01 to set up mode
+    TIMER_A0->CTL = TIMER_A_CTL_TASSEL_2 | TIMER_A_CTL_MC_1;
+
+    // Reset before beginning use
+    TIMER_A0->CTL |= TIMER_A_CTL_CLR;
 
 }
 

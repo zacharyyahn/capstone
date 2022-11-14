@@ -12,6 +12,7 @@
 #include "msp.h"
 #include "UART.h"
 #include "PWM.h"
+#include "SwitchReader.h"
 #include "Clock.h"
 #include "Planning.h"
 #include "CortexM.h"
@@ -19,7 +20,7 @@
 extern char in_buffer[BUF_LINE][BUF_SIZE+1];
 extern int latest_received_line;
 extern int line_received;
-
+extern uint8_t switch_image;
 
 int main(void)
 {
@@ -29,11 +30,12 @@ int main(void)
 
     Clock_Init48MHz();
     PWM_Init();
+    SwitchReader_Init();
     SetDuty_LDef(10000);
+
     EnableInterrupts();
 
     while (1) {
-
     }
 }
 
