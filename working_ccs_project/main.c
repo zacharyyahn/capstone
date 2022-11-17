@@ -30,8 +30,11 @@ int main(void)
 
     Clock_Init48MHz();
     PWM_Init();
-    SwitchReader_Init();
     SetDuty_LDef(10000);
+    SetDir_LDef(REVERSE);
+
+    SetDuty_LOff(2000);
+    SetDuty_RDef(6000);
 
     EnableInterrupts();
 

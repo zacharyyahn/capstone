@@ -16,8 +16,8 @@
 
 #define LDEF_IN1_BIT                0x01
 #define LDEF_IN2_BIT                0x02
-#define LOFF_IN1_BIT                0x08
-#define LOFF_IN2_BIT                0x10
+#define LOFF_IN1_BIT                0x10
+#define LOFF_IN2_BIT                0x20
 #define RDEF_IN1_BIT                0x01
 #define RDEF_IN2_BIT                0x02
 #define ROFF_IN1_BIT                0x04
@@ -35,7 +35,7 @@
 void PWM_Init();
 
 void SetDuty_LDef(uint16_t duty);
-void SetDuty_LOef(uint16_t duty);
+void SetDuty_LOff(uint16_t duty);
 void SetDuty_RDef(uint16_t duty);
 void SetDuty_ROff(uint16_t duty);
 
