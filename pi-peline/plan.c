@@ -18,9 +18,85 @@ void init_plan() {
     rods[1].x = OFFENSE_X;
 }
 
-//TODO: show where the players will move
-void plot_player_pos(__u8* filtered, int rod_num, float rod_pos) {
+void return_to_default() {
+    for (int i = 0; i < NUM_RODS; i++) {
+        rods[i].y = 0.5 * rods[i].travel;
+        rods[i].rot_state = BLOCK;
+    } 
+}
+
+// find the y position of the intersection between a rod and the ball's
+// path, extrapolating from the ball's velocity
+float rod_intersect_from_vel (struct ball_state *b, float rod_x) {
+    float intersect_y = b->y + (b->v_y / b->v_x) * (rod_x - b->x);
+    if (intersect_y < 0) return 0;
+    if (intersect_y > TABLE_HEIGHT) return TABLE_HEIGHT;
+    return intersect_y;
+}
+
+// find the y position of the intersection between a rod and a potential
+// shot on our goal, drawing a line from the ball to the center of the goal
+float rod_intersect_to_goal (struct ball_state *b, float rod_x) {
+    float goal_x = TABLE_LENGTH;
+    float goal_y = TABLE_HEIGHT / 2;
+    return goal_y - (goal_x - rod_x) * (goal_y - b->y) / (goal_x - b->x);
+}
+
+// choose a player on rod r to cover position y, and
+// set the rod position to move the player there
+void move_player_to_y (struct rod *r, float y) {
+    if (r->num_players != 3) {
+        // not bothering to generalize to other num_players
+        printf("ERROR: move_player_to_y requires exactly 3 players, rod has %d\n", r->num_players);
+        return;
+    }
+
+    int chosen_player;
+    if (y >= r->player_base[1] - PLAYER_FOOT_RADIUS && y <= r->player_base[1] + r->travel + PLAYER_FOOT_RADIUS) {
+        chosen_player = 1;
+    } else if (y <= r->player_base[0] + r->travel + PLAYER_FOOT_RADIUS) {
+        chosen_player = 0;
+    } else if (y >= r->player_base[2] - PLAYER_FOOT_RADIUS) {
+        chosen_player = 2;
+    } else {
+        // should be unreachable
+        printf("ERROR: could not choose a player for y position %f\n", y);
+        return;
+    }
+
+    r->y = y - r->player_base[chosen_player];
     
+    // might assign an r->y outside bounds because player's feet don't reach all the way to the edge of the table
+    if (r->y < 0) r->y = 0;
+    if (r->y > r->travel) r->y = r->travel;
+}
+
+// TODO: send the desired state to the MSP
+void command_msp() {
+    for (int i = 0; i < NUM_RODS; i++) {
+        printf("rod %d:\tstate: ", i);
+        switch (rods[i].rot_state) {
+        case BLOCK:
+            printf("BLOCK\t");
+            break;
+        case READY:
+            printf("READY\t");
+            break;
+        case SHOOT:
+            printf("SHOOT\t");
+            break;
+        case FANCY_SHOOT:
+            printf("FANCY\t");
+            break;
+        case SPIN:
+            printf("SPIN \t");
+            break;
+        default:
+            break;
+        }
+        printf("y: %f\n", rods[i].y);
+    }
+    printf("\n");
 }
 
 // Plan where to move the rods 
@@ -31,11 +107,8 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
     }
     if (!have_ball_pos) {
         // return all rods to default position if we don't see a ball
-        for (int i = 0; i < NUM_RODS; i++) {
-            rods[i].y = PLAYER_EDGE_MARGIN + 0.5 * rods[i].travel;
-            rods[i].rot_state = BLOCK;
-        }
-        // TODO: send command to MSP
+        return_to_default();
+        command_msp();
         return;
     }
     
@@ -66,10 +139,42 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
         }
     }
 
-    // TODO: implement action state of each rod
+    // implement action state of each rod
+    for (r = 0; r < NUM_RODS; r++) {
+        switch (rods[r].rot_state) {
+        case BLOCK:
+            if (b->v_x >= MIN_ONCOMING_PLAN_USE_VEL_SPEED) {
+                // if ball is moving towards us, use velocity extrapolation
+                move_player_to_y(&rods[r], rod_intersect_from_vel(b, rods[r].x));
+            } else {
+                // otherwise, draw line to goal
+                move_player_to_y(&rods[r], rod_intersect_to_goal(b, rods[r].x));
+            }
+            break;
+        case READY:
+            if (b->v_x <= -1 * MIN_ONCOMING_PLAN_USE_VEL_SPEED) {
+                // if ball is moving towards us, use velocity extrapolation
+                // ball is behind us, so v_x needs to be negative
+                move_player_to_y(&rods[r], rod_intersect_from_vel(b, rods[r].x));
+            } else {
+                // otherwise, just use ball's current position
+                move_player_to_y(&rods[r], b->y);
+            }
+            break;
+        case SHOOT:
+        case FANCY_SHOOT:
+        case SPIN:
+            // aim at ball's current position
+            move_player_to_y(&rods[r], b->y);
+            break;
+        default:
+            // should be unreachable
+            printf("ERROR: unknown action state %d of rod %d\n", rods[r].rot_state, r);
+            break;
+        }
+    }
 
-
-    // TODO: send command to MSP 
+    command_msp();
 }
 
 void print_players(struct rod *r, int rod_num) {
@@ -84,5 +189,10 @@ void print_players(struct rod *r, int rod_num) {
         }
     }
     printf("]\n----------- Rod %d State -----------\n", rod_num);
+}
+
+//TODO: show where the players will move
+void plot_player_pos(__u8* filtered, int rod_num, float rod_pos) {
+    
 }
 

@@ -8,7 +8,7 @@
 
 // in mm/s
 #define MAX_ONCOMING_SHOOT_SPEED        100.0
-
+#define MIN_ONCOMING_PLAN_USE_VEL_SPEED 100.0
 typedef enum {
     BLOCK,
     READY,
@@ -23,11 +23,11 @@ struct rod {
     float travel;
     int num_players; // number of players in the player set
     float player_base[PLAYERS_PER_ROD]; // position of the players at one extreme positioning
-                                    // range of player values are player_base[i] to player_base[i] + travel
+                                        // range of player values are player_base[i] to player_base[i] + travel
 
     // updated variables
     
-    // current *desired/output* y pos, measured as the 0th (top) player's position in real
+    // current *desired/output* y pos, measured as distance the 0th (top) player travels from its base position in real
     // space / table coordinates. This can be converted into something sensible for the MSP
     // to understand later
     float y;

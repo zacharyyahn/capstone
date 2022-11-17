@@ -456,8 +456,8 @@ int main () {
             //filter(losses, filtered); //printf("filter time (ms): %d\t", filter(losses, filtered) / 1000000);
             //argmin(filtered, &ball_pos); //printf("argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
             find_center(exists, &ball_pos);
-            find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); //printf("corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
-            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);  printf("frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
+            find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); // printf("corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
+            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);  // printf("frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
             if (have_prev_pos) {
                 vel.x = (rel_pos.x - prev_pos.x) / dt;  // units are mm/us
                 vel.y = (rel_pos.y - prev_pos.y) / dt;
@@ -469,7 +469,7 @@ int main () {
 	    // assume velocity is unchanged
             rel_pos.x = prev_pos.x + vel.x * dt;
             rel_pos.y = prev_pos.y + vel.y * dt;
-            printf("frame %d\tinterpolated ball position: (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
+            // printf("frame %d\tinterpolated ball position: (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
 	    prev_pos = rel_pos;
             have_prev_pos = 1;
             interpolated_frames++;
@@ -480,7 +480,7 @@ int main () {
         
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-        printf("total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
+        //printf("total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
         //printf("top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
 
         b.x = rel_pos.x;
