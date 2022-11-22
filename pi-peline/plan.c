@@ -1,6 +1,7 @@
 #include "plan.h"
 
 struct rod rods[NUM_RODS];
+int msp_fd;
 
 void init_plan() {
     // common attributes
@@ -16,6 +17,39 @@ void init_plan() {
     // unique x positions
     rods[0].x = DEFENSE_X;
     rods[1].x = OFFENSE_X;
+
+    // set up serial communication to MSP
+    // hopefully this is the right device, might be ACM1 instead
+    msp_fd = open("/dev/ttyACM0", O_WRONLY | O_NONBLOCK);
+    if (msp_fd < 0) {
+        perror("error opening serial port to msp");
+        exit(1);
+    }
+
+    struct termios term;
+    if (tcgetattr(msp_fd, &term)) {
+        perror("error getting termios attributes");
+        exit(1);
+    }
+    
+    // set baud rate to 9600
+    if (cfsetospeed(&term, B9600)) {
+        perror("error setting line speed");
+        exit(1);
+    }
+   
+    term.c_oflag = 0;                                   // no output remapping or delays
+    term.c_lflag = 0;                                   // no canonical mode or other weird stuff
+
+    term.c_cflag = (term.c_cflag & ~CSIZE) | CS8;       // set 8 bit chars
+    term.c_cflag &= ~CSTOPB;                            // use only one stop bit
+    term.c_cflag &= ~CREAD;                             // disable receiver
+    term.c_cflag &= ~PARENB;                            // disable parity
+
+    if (tcsetattr(msp_fd, TCSANOW, &term)) {
+        perror("error setting termios attributes");
+        exit(1);
+    }
 }
 
 void return_to_default() {
@@ -71,7 +105,7 @@ void move_player_to_y (struct rod *r, float y) {
     if (r->y > r->travel) r->y = r->travel;
 }
 
-// TODO: send the desired state to the MSP
+// send the desired state to the MSP
 void command_msp() {
     for (int i = 0; i < NUM_RODS; i++) {
         printf("rod %d:\tstate: ", i);
@@ -97,6 +131,29 @@ void command_msp() {
         printf("y: %f\n", rods[i].y);
     }
     printf("\n");
+
+    char buf[8];
+    char index, data;
+    int encoder_count_y;
+    for (int r = 0; r < NUM_RODS; r++) {
+        // assume msp y axis is opposite of table space y axis
+        encoder_count_y = ENCODER_COUNT_TRAVEL * (1 - rods[r].y / rods[r].travel);
+        
+        // linear data, from least to most significant 5-bit chunk
+        for (int char_i = 0; char_i < 3; char_i++) {
+            index = (4*r + char_i) << 5;
+            data  = (encoder_count_y >> (5 * char_i)) & 0b00011111;
+            buf[4*r + char_i] = index | data;
+        }
+
+        // rotational data
+        index = (4*r + 3) << 5;
+        data  = rods[r].rot_state;
+        buf[4*r + 3] = index | data;
+    }
+    if (write(msp_fd, buf, 8)) {
+        perror("error writing bytes to msp");
+    }
 }
 
 // Plan where to move the rods 

@@ -1,6 +1,9 @@
 #ifndef TABLE_H
 #define TABLE_H
 
+// total encoder ticks in the full travel of linear motor
+#define ENCODER_COUNT_TRAVEL    8000
+
 // measurements in mm
 #define TABLE_LENGTH            396.0
 #define TABLE_HEIGHT            285.0
