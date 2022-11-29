@@ -28,8 +28,13 @@ int main(void)
     WDT_A->CTL = 0x0080 | 0x5A00;
     // UART_A0_Init();
 
+    P3->DIR |= BIT0;
+    P3->SEL0 &= ~BIT0;
+    P3->SEL1 &= ~BIT0;
+
     Clock_Init48MHz();
     PWM_Init();
+    SwitchReader_Init();
     SetDuty_LDef(10000);
     SetDir_LDef(REVERSE);
 
@@ -39,6 +44,7 @@ int main(void)
     EnableInterrupts();
 
     while (1) {
+        P3->OUT = (switch_image & RLSDEF_BIT);
     }
 }
 

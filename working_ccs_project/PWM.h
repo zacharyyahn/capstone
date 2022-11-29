@@ -23,6 +23,10 @@
 #define ROFF_IN1_BIT                0x04
 #define ROFF_IN2_BIT                0x08
 
+#define LDEF_INH_BIT                BIT6
+#define LOFF_INH_BIT                BIT7
+#define R_SLP_BIT                   BIT4
+
 #define LDEF_CCR_INDEX 1
 #define LOFF_CCR_INDEX 2
 #define RDEF_CCR_INDEX 3
