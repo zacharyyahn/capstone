@@ -14,27 +14,27 @@
 #include "PWM.h"
 #include "SwitchReader.h"
 #include "Clock.h"
-#include "Planning.h"
 #include "CortexM.h"
 #include "Encoder.h"
 
-extern char in_buffer[BUF_LINE][BUF_SIZE+1];
-extern int latest_received_line;
-extern int line_received;
-extern uint8_t switch_image;
-extern struct encoder_t RDef_Encoder;
-extern struct encoder_t LDef_Encoder;
+extern uint32_t desired_defense_position, desired_offense_position;
+extern enum rotational_state defense_rotstate, offense_rotstate;
 
 int main(void)
 {
     // Stop watchdog timer; technical reference (p. 585)
     WDT_A->CTL = 0x0080 | 0x5A00;
-    // UART_A0_Init();
+    UART_A0_Init();
 
     // Configure P3.0 as output for debug
     P3->DIR |= BIT0;
     P3->SEL0 &= ~BIT0;
     P3->SEL1 &= ~BIT0;
+
+    // Red LED at P1.0 as output for debug
+    P1->DIR |= BIT0;
+    P1->SEL0 &= ~BIT0;
+    P1->SEL1 &= ~BIT0;
 
     Clock_Init48MHz();
     PWM_Init();
@@ -54,6 +54,12 @@ int main(void)
     EnableInterrupts();
 
     while (1) {
+        if (desired_defense_position == 4000 && defense_rotstate == BLOCK &&
+                desired_offense_position == 4000 && offense_rotstate == BLOCK) {
+            P1->OUT |= BIT0;
+        } else {
+            P1->OUT &= ~BIT0;
+        }
     }
 }
 

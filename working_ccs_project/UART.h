@@ -7,8 +7,16 @@
 #include <stdio.h>
 #include "msp.h"
 
-#define BUF_SIZE 40
-#define BUF_LINE 10
+enum rotational_state {
+    BLOCK,
+    READY,
+    SHOOT,
+    FANCY_SHOOT,
+    SPIN,
+};
+
+// last 5 bits of a UART character carry the data, first 3 carry the index
+#define UART_DATA_BITMASK   0b00011111
 
 /*
  * Configures eUSCI_A0 in UART mode
