@@ -23,14 +23,16 @@
 #define ENC_A_BIT BIT6
 #define ENC_B_BIT BIT7
 
-#define STATE_11 0xC0
-#define STATE_10 0x80
-#define STATE_01 0x40
-#define STATE_00 0x00
+enum encoder_state {
+    STATE_11 = 0xC0,
+    STATE_10 = 0x80,
+    STATE_01 = 0x40,
+    STATE_00 = 0x00,
+};
 
 struct encoder_t {
-    uint16_t count;
-    uint8_t state;
+    int16_t count;
+    enum encoder_state state;
 };
 
 struct encoder_t LDef_Encoder;
