@@ -24,12 +24,6 @@ int main(void)
 {
     // Stop watchdog timer; technical reference (p. 585)
     WDT_A->CTL = 0x0080 | 0x5A00;
-    UART_A0_Init();
-
-    // Configure P3.0 as output for debug
-    P3->DIR |= BIT0;
-    P3->SEL0 &= ~BIT0;
-    P3->SEL1 &= ~BIT0;
 
     // Red LED at P1.0 as output for debug
     P1->DIR |= BIT0;
@@ -40,16 +34,13 @@ int main(void)
     PWM_Init();
     SwitchReader_Init();
     Encoder_Init();
+    UART_A0_Init();
 
     SetDuty_RDef(2000);
-    SetDuty_LDef(0);
+    SetDuty_LDef(2000);
     SetDuty_ROff(0);
     SetDuty_LOff(0);
 
-    SetDir_LDef(REVERSE);
-    SetDir_LOff(REVERSE);
-    SetDir_RDef(REVERSE);
-    SetDir_ROff(REVERSE);
 
     EnableInterrupts();
 

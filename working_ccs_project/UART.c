@@ -36,10 +36,10 @@ void UART_A0_Init(void) {
     EUSCI_A0->CTLW1 |= 0x0001;
 
     // Set baud rate to 9600 (rel to 3MHz SMCLK)
-    // Clock settings for SMCLK: DCOCLK at 3MHz default, no divider (technical reference p. 307)
+    // Clock settings for SMCLK 12MHz (technical reference p. 307)
     // N = clk_freq / Baud Rate
     // Value chosen from recommended table (p. 741 tech ref)
-    EUSCI_A0->BRW = 312;
+    EUSCI_A0->BRW = 1250;
 
     // Enable interface
     EUSCI_A0->CTLW0 &= ~0x0001;
