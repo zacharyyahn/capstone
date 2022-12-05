@@ -8,16 +8,11 @@
 
 #include "UART.h"
 
-// Current indexes of write buffer and fileline
-int char_index = 0;
-int line_index = 0;
-int latest_received_line = -1;
-int line_received = 0;
-int is_newline;
-
-// Contains interrupt handler for char Rx that writes char to buffer
-// Depending on usage, consider a more robust (FIFO?) structure for buffering lines
-char in_buffer[BUF_LINE][BUF_SIZE+1]; // extra spot for null terminator
+// desired player state information from Pi
+// scratch values are used while positions are being built across multiple bytes
+int16_t scratch_offense_position, scratch_defense_position;
+int16_t desired_offense_position, desired_defense_position;
+enum rotational_state offense_rotstate, defense_rotstate;
 
 // Initializes UART mode for eUSCI_A0; follows procedure from technical reference (p. 728)
 void UART_A0_Init(void) {
@@ -41,17 +36,17 @@ void UART_A0_Init(void) {
     EUSCI_A0->CTLW1 |= 0x0001;
 
     // Set baud rate to 9600 (rel to 3MHz SMCLK)
-    // Clock settings for SMCLK: DCOCLK at 3MHz default, no divider (technical reference p. 307)
+    // Clock settings for SMCLK 12MHz (technical reference p. 307)
     // N = clk_freq / Baud Rate
     // Value chosen from recommended table (p. 741 tech ref)
-    EUSCI_A0->BRW = 312;
+    EUSCI_A0->BRW = 1250;
 
     // Enable interface
     EUSCI_A0->CTLW0 &= ~0x0001;
 
     // Enable interrupt 16; datasheet (p. 118)
     NVIC->ISER[0] |= 0x00010000;
-    // Prioity set in top three bits of register
+    // Priority set in top three bits of register
     NVIC->IP[16] = (0x04 << 5);
 
     // Enable receive Rx interrupt (bit 0); technical reference (p. 752)
@@ -75,28 +70,50 @@ void EUSCIA0_IRQHandler(void) {
     if (EUSCI_A0->IFG & 0x01) {
 
         // Rx char stored in RXBUF at time of flag set
-        is_newline = 0;
         char c = ((char) (EUSCI_A0->RXBUF));
-        if (c == '\n') {
-            is_newline = 1;
-            c = 0; // null terminator
-        }
 
-        // If the text is overflowing the line, don't save it
-        if (char_index < BUF_SIZE && line_index < BUF_LINE) {
-            in_buffer[line_index][char_index] = c;
-        } else if (char_index == BUF_SIZE) {
-            in_buffer[line_index][BUF_SIZE] = 0; // end with null terminator and throw away character
-        }
-
-        // Setup the spot of the next character to read
-        if (is_newline) {
-            char_index = 0;
-            latest_received_line = line_index++;
-            line_received = 1;
-            line_index %= BUF_LINE;
-        } else {
-            char_index++;
+        // Most significant 3 bits are the byte index. Byte order is (from 0)
+        // 3 bytes of defense position, then 1 byte of defense rotational state,
+        // then the same for offense position and rotational state.
+        // Positions are sent least-significant 5-bit word first.
+        switch (c >> 5) {
+        case 0:
+            // least significant 5-bit word of defense position
+            scratch_defense_position = (uint32_t) (c & UART_DATA_BITMASK);
+            break;
+        case 1:
+            // middle 5-bit word of defense position
+            scratch_defense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 5;
+            break;
+        case 2:
+            // most significant 5-bit word of defense position
+            scratch_defense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
+            desired_defense_position = scratch_defense_position;
+            break;
+        case 3:
+            // defense rotational state
+            defense_rotstate = c & UART_DATA_BITMASK;
+            break;
+        case 4:
+            // least significant 5-bit word of offense position
+            scratch_offense_position = (uint32_t) (c & UART_DATA_BITMASK);
+            break;
+        case 5:
+            // middle 5-bit word of offense position
+            scratch_offense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 5;
+            break;
+        case 6:
+            // most significant 5-bit word of offense position
+            scratch_offense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
+            desired_offense_position = scratch_offense_position;
+            break;
+        case 7:
+            // offense rotational state
+            offense_rotstate = c & UART_DATA_BITMASK;
+            break;
+        default:
+            // should never happen
+            break;
         }
 
         // Reset flag
