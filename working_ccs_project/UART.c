@@ -166,6 +166,7 @@ void EUSCIA0_IRQHandler(void) {
         // Handle Tx
         if (bytes_to_send) {
             EUSCI_A0->TXBUF = tx_buffer[2 - bytes_to_send];
+            bytes_to_send--;
         }
         EUSCI_A0->IFG &= ~EUSCI_A_IFG_TXIFG;
     }
