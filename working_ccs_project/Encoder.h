@@ -30,15 +30,10 @@ enum encoder_state {
     STATE_00 = 0x00,
 };
 
-struct encoder_t {
+struct encoder {
     int16_t count;
     enum encoder_state state;
 };
-
-struct encoder_t LDef_Encoder;
-struct encoder_t LOff_Encoder;
-struct encoder_t RDef_Encoder;
-struct encoder_t ROff_Encoder;
 
 void Encoder_Init();
 

@@ -18,9 +18,8 @@
 #define LLSOFF1_BIT             0x40
 #define LLSOFF2_BIT             0x80
 #define ALL_SWITCH_BITS         (RLSDEF_BIT | RLSOFF_BIT | LLSDEF1_BIT | LLSDEF2_BIT | LLSOFF1_BIT | LLSOFF2_BIT)
-uint8_t switch_image;
 
 void SwitchReader_Init();
-
+uint8_t ReadSwitches();
 
 #endif /* SWITCHREADER_H_ */

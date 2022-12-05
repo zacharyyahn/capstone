@@ -33,8 +33,10 @@
 #define ROFF_CCR_INDEX 4
 
 // Direction bits for each motor; 1 = forwards
-#define FORWARD 1
-#define REVERSE 0
+enum direction {
+    FORWARD = 1,
+    REVERSE = 0,
+};
 
 void PWM_Init();
 
@@ -43,10 +45,10 @@ void SetDuty_LOff(uint16_t duty);
 void SetDuty_RDef(uint16_t duty);
 void SetDuty_ROff(uint16_t duty);
 
-void SetDir_LDef(uint8_t direction);
-void SetDir_LOff(uint8_t direction);
-void SetDir_RDef(uint8_t direction);
-void SetDir_ROff(uint8_t direction);
+void SetDir_LDef(enum direction dir);
+void SetDir_LOff(enum direction dir);
+void SetDir_RDef(enum direction dir);
+void SetDir_ROff(enum direction dir);
 
 
 #endif /* PWM_H_ */

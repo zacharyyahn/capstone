@@ -93,46 +93,66 @@ void SetDuty_ROff (uint16_t duty) {
 }
 
 // Setter for direction flag for rotational defense motor
-void SetDir_RDef (uint8_t direction) {
-    if (direction == FORWARD) {
+void SetDir_RDef (enum direction dir) {
+    switch (dir) {
+    case FORWARD:
         RDef_PWM_Pin = RDEF_IN1_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN2_BIT;
-    } else {
+        break;
+    case REVERSE:
         RDef_PWM_Pin = RDEF_IN2_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN1_BIT;
+        break;
+    default:
+        break;
     }
 }
 
 // Setter for direction flag for rotational offense motor
-void SetDir_ROff (uint8_t direction) {
-    if (direction == FORWARD) {
+void SetDir_ROff (enum direction dir) {
+    switch (dir) {
+    case FORWARD:
         ROff_PWM_Pin = ROFF_IN1_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN2_BIT;
-    } else {
+        break;
+    case REVERSE:
         ROff_PWM_Pin = ROFF_IN2_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN1_BIT;
+        break;
+    default:
+        break;
     }
 }
 
 // Setter for direction flag for linear defense motor
-void SetDir_LDef (uint8_t direction) {
-    if (direction == FORWARD) {
+void SetDir_LDef (enum direction dir) {
+    switch (dir) {
+    case FORWARD:
         LDef_PWM_Pin = LDEF_IN1_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN2_BIT;
-    } else {
+		break;
+    case REVERSE:
         LDef_PWM_Pin = LDEF_IN2_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN1_BIT;
+		break;
+	default:
+		break;
     }
 }
 
 // Setter for direction flag for linear offense motor
-void SetDir_LOff (uint8_t direction) {
-    if (direction == FORWARD) {
+void SetDir_LOff (enum direction dir) {
+    switch (dir) {
+    case FORWARD:
         LOff_PWM_Pin = LOFF_IN1_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN2_BIT;
-    } else {
+		break;
+    case REVERSE:
         LOff_PWM_Pin = LOFF_IN2_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN1_BIT;
+		break;
+	default:
+		break;
     }
 }
 

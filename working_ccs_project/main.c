@@ -17,8 +17,18 @@
 #include "CortexM.h"
 #include "Encoder.h"
 
-extern uint32_t desired_defense_position, desired_offense_position;
+#define LINEAR_ENCODER_COUNT_MAX        765
+#define ROTATIONAL_ENCODER_COUNT_90DEG  150
+
+// commands from Pi
+extern int16_t desired_defense_position, desired_offense_position;
 extern enum rotational_state defense_rotstate, offense_rotstate;
+
+// actual motor states
+extern struct encoder LDef_Encoder, LOff_Encoder, RDef_Encoder, ROff_Encoder;
+
+// limit switches
+uint8_t switch_image;
 
 int main(void)
 {
@@ -41,17 +51,42 @@ int main(void)
     Encoder_Init();
     UART_A0_Init();
 
+
     SetDuty_RDef(0);
     SetDuty_LDef(0);
     SetDuty_ROff(0);
-    SetDuty_LOff(0);
+    SetDir_LOff(REVERSE);
+    SetDuty_LOff(0000);
 
 
     EnableInterrupts();
 
+
     while (1) {
-        if (desired_defense_position == 4000 && defense_rotstate == BLOCK &&
-                desired_offense_position == 4000 && offense_rotstate == BLOCK) {
+        // calibrate encoder counts from limit switches
+        switch_image = ReadSwitches();
+        if (switch_image & RLSDEF_BIT)  RDef_Encoder.count = 0;
+        if (switch_image & RLSOFF_BIT)  ROff_Encoder.count = 0;
+        if (switch_image & LLSDEF1_BIT) LDef_Encoder.count = 0;
+        if (switch_image & LLSDEF2_BIT) LDef_Encoder.count = LINEAR_ENCODER_COUNT_MAX;
+        if (switch_image & LLSOFF1_BIT) LOff_Encoder.count = 0;
+        if (switch_image & LLSOFF2_BIT) LOff_Encoder.count = LINEAR_ENCODER_COUNT_MAX;
+
+        if (switch_image & LLSOFF1_BIT) {
+            SetDuty_LOff(0);
+            SetDir_LOff(FORWARD);
+            SetDuty_LOff(0000);
+        }
+
+        if (switch_image & LLSOFF2_BIT) {
+            SetDuty_LOff(0);
+            SetDir_LOff(REVERSE);
+            SetDuty_LOff(0000);
+        }
+
+        //if (desired_defense_position == 4000 && defense_rotstate == BLOCK &&
+        //        desired_offense_position == 4000 && offense_rotstate == BLOCK) {
+        if (switch_image) {
             P1->OUT |= BIT0;
         } else {
             P1->OUT &= ~BIT0;

@@ -10,8 +10,8 @@
 
 // desired player state information from Pi
 // scratch values are used while positions are being built across multiple bytes
-uint32_t scratch_offense_position, scratch_defense_position;
-uint32_t desired_offense_position, desired_defense_position;
+int16_t scratch_offense_position, scratch_defense_position;
+int16_t desired_offense_position, desired_defense_position;
 enum rotational_state offense_rotstate, defense_rotstate;
 
 // Initializes UART mode for eUSCI_A0; follows procedure from technical reference (p. 728)

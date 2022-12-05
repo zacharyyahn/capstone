@@ -7,6 +7,8 @@
 
 #include "Encoder.h"
 
+struct encoder LDef_Encoder, LOff_Encoder, RDef_Encoder, ROff_Encoder;
+
 void Encoder_Init() {
 
     // Configure encoder signal pins as input
