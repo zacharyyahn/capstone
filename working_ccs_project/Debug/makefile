@@ -4,7 +4,7 @@
 
 SHELL = cmd.exe
 
-CG_TOOL_ROOT := C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS
+CG_TOOL_ROOT := C:/ti/ccs1210/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS
 
 GEN_OPTS__FLAG := 
 GEN_CMDS__FLAG := 
@@ -12,8 +12,9 @@ GEN_CMDS__FLAG :=
 ORDERED_OBJS += \
 "./Clock.obj" \
 "./CortexM.obj" \
+"./Encoder.obj" \
 "./PWM.obj" \
-"./Planning.obj" \
+"./SwitchReader.obj" \
 "./UART.obj" \
 "./main.obj" \
 "./startup_msp432p401r_ccs.obj" \
@@ -147,22 +148,22 @@ all: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 piout_simulator.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 	@echo 'Building target: "$@"'
 	@echo 'Invoking: Arm Linker'
-	"C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me --advice:power=all --define=__MSP432P401R__ --define=ccs -g --gcc --diag_warning=225 --diag_wrap=off --display_error_number --abi=eabi -z -m"piout_simulator.map" --heap_size=1024 --stack_size=512 -i"C:/ti/ccs1200/ccs/ccs_base/arm/include" -i"C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/lib" -i"C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include" --reread_libs --diag_wrap=off --display_error_number --warn_sections --xml_link_info="piout_simulator_linkInfo.xml" --rom_model -o "piout_simulator.out" $(ORDERED_OBJS)
+	"C:/ti/ccs1210/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me --advice:power=all --define=__MSP432P401R__ --define=ccs -g --gcc --diag_warning=225 --diag_wrap=off --display_error_number --abi=eabi -z -m"piout_simulator.map" --heap_size=1024 --stack_size=512 -i"C:/ti/ccs1210/ccs/ccs_base/arm/include" -i"C:/ti/ccs1210/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/lib" -i"C:/ti/ccs1210/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/include" --reread_libs --diag_wrap=off --display_error_number --warn_sections --xml_link_info="piout_simulator_linkInfo.xml" --rom_model -o "piout_simulator.out" $(ORDERED_OBJS)
 	@echo 'Finished building target: "$@"'
 	@echo ' '
 
 piout_simulator.hex: $(EXE_OUTPUTS)
 	@echo 'Building secondary target: "$@"'
 	@echo 'Invoking: Arm Hex Utility'
-	"C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/bin/armhex" --memwidth=8 --romwidth=8 --diag_wrap=off -o "piout_simulator.hex" $(EXE_OUTPUTS__QUOTED)
+	"C:/ti/ccs1210/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/bin/armhex" --memwidth=8 --romwidth=8 --diag_wrap=off -o "piout_simulator.hex" $(EXE_OUTPUTS__QUOTED)
 	@echo 'Finished building secondary target: "$@"'
 	@echo ' '
 
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "Clock.obj" "CortexM.obj" "PWM.obj" "Planning.obj" "UART.obj" "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" 
-	-$(RM) "Clock.d" "CortexM.d" "PWM.d" "Planning.d" "UART.d" "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" 
+	-$(RM) "Clock.obj" "CortexM.obj" "Encoder.obj" "PWM.obj" "SwitchReader.obj" "UART.obj" "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" 
+	-$(RM) "Clock.d" "CortexM.d" "Encoder.d" "PWM.d" "SwitchReader.d" "UART.d" "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 

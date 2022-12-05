@@ -11,8 +11,9 @@ CMD_SRCS += \
 C_SRCS += \
 ../Clock.c \
 ../CortexM.c \
+../Encoder.c \
 ../PWM.c \
-../Planning.c \
+../SwitchReader.c \
 ../UART.c \
 ../main.c \
 ../startup_msp432p401r_ccs.c \
@@ -21,8 +22,9 @@ C_SRCS += \
 C_DEPS += \
 ./Clock.d \
 ./CortexM.d \
+./Encoder.d \
 ./PWM.d \
-./Planning.d \
+./SwitchReader.d \
 ./UART.d \
 ./main.d \
 ./startup_msp432p401r_ccs.d \
@@ -31,8 +33,9 @@ C_DEPS += \
 OBJS += \
 ./Clock.obj \
 ./CortexM.obj \
+./Encoder.obj \
 ./PWM.obj \
-./Planning.obj \
+./SwitchReader.obj \
 ./UART.obj \
 ./main.obj \
 ./startup_msp432p401r_ccs.obj \
@@ -41,8 +44,9 @@ OBJS += \
 OBJS__QUOTED += \
 "Clock.obj" \
 "CortexM.obj" \
+"Encoder.obj" \
 "PWM.obj" \
-"Planning.obj" \
+"SwitchReader.obj" \
 "UART.obj" \
 "main.obj" \
 "startup_msp432p401r_ccs.obj" \
@@ -51,8 +55,9 @@ OBJS__QUOTED += \
 C_DEPS__QUOTED += \
 "Clock.d" \
 "CortexM.d" \
+"Encoder.d" \
 "PWM.d" \
-"Planning.d" \
+"SwitchReader.d" \
 "UART.d" \
 "main.d" \
 "startup_msp432p401r_ccs.d" \
@@ -61,8 +66,9 @@ C_DEPS__QUOTED += \
 C_SRCS__QUOTED += \
 "../Clock.c" \
 "../CortexM.c" \
+"../Encoder.c" \
 "../PWM.c" \
-"../Planning.c" \
+"../SwitchReader.c" \
 "../UART.c" \
 "../main.c" \
 "../startup_msp432p401r_ccs.c" \

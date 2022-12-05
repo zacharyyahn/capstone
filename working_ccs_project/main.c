@@ -30,6 +30,15 @@ extern struct encoder LDef_Encoder, LOff_Encoder, RDef_Encoder, ROff_Encoder;
 // limit switches
 uint8_t switch_image;
 
+unsigned int ProportionalControl (int error) {
+    unsigned int abs_error = error >= 0 ? error : 0-error;
+    if (abs_error < 20) {
+        return 0;
+    } else {
+        return 6000;
+    }
+}
+
 int main(void)
 {
     // Stop watchdog timer; technical reference (p. 585)
@@ -51,16 +60,23 @@ int main(void)
     Encoder_Init();
     UART_A0_Init();
 
-
-    SetDuty_RDef(0);
-    SetDuty_LDef(0);
-    SetDuty_ROff(0);
-    SetDir_LOff(REVERSE);
-    SetDuty_LOff(0000);
-
-
     EnableInterrupts();
 
+ 
+    Stop_LOff();
+    Stop_ROff();
+    Stop_LDef();
+    Stop_RDef();
+
+    SetDir_LOff(REVERSE);
+    SetDuty_LOff(2000);
+
+
+    while (!(ReadSwitches() & LLSOFF1_BIT)) { }
+
+    Stop_LOff();
+
+    int target = 350;
 
     while (1) {
         // calibrate encoder counts from limit switches
@@ -72,17 +88,8 @@ int main(void)
         if (switch_image & LLSOFF1_BIT) LOff_Encoder.count = 0;
         if (switch_image & LLSOFF2_BIT) LOff_Encoder.count = LINEAR_ENCODER_COUNT_MAX;
 
-        if (switch_image & LLSOFF1_BIT) {
-            SetDuty_LOff(0);
-            SetDir_LOff(FORWARD);
-            SetDuty_LOff(0000);
-        }
-
-        if (switch_image & LLSOFF2_BIT) {
-            SetDuty_LOff(0);
-            SetDir_LOff(REVERSE);
-            SetDuty_LOff(0000);
-        }
+        SetDir_LOff(LOff_Encoder.count < target ? FORWARD : REVERSE);
+        SetDuty_LOff(ProportionalControl(LOff_Encoder.count - target));
 
         //if (desired_defense_position == 4000 && defense_rotstate == BLOCK &&
         //        desired_offense_position == 4000 && offense_rotstate == BLOCK) {
