@@ -10,9 +10,13 @@
 
 // desired player state information from Pi
 // scratch values are used while positions are being built across multiple bytes
-int16_t scratch_offense_position, scratch_defense_position;
-int16_t desired_offense_position, desired_defense_position;
+uint16_t scratch_offense_position, scratch_defense_position;
+uint16_t desired_offense_position, desired_defense_position;
 enum rotational_state offense_rotstate, defense_rotstate;
+enum main_state_enum main_state;
+
+// maximum linear encoder count for bounds checking
+extern uint16_t linear_encoder_range;
 
 // Initializes UART mode for eUSCI_A0; follows procedure from technical reference (p. 728)
 void UART_A0_Init(void) {
@@ -88,7 +92,15 @@ void EUSCIA0_IRQHandler(void) {
         case 2:
             // most significant 5-bit word of defense position
             scratch_defense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
-            desired_defense_position = scratch_defense_position;
+            if (scratch_defense_position > linear_encoder_range) {
+                // the desired position is out of bounds, which should be impossible
+                // the only thing we can do here is go to a shutdown state
+                main_state = WAIT;
+                desired_defense_position = 0;
+                P1->OUT |= BIT0;
+            } else {
+                desired_defense_position = scratch_defense_position;
+            }
             break;
         case 3:
             // defense rotational state
@@ -105,11 +117,33 @@ void EUSCIA0_IRQHandler(void) {
         case 6:
             // most significant 5-bit word of offense position
             scratch_offense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
-            desired_offense_position = scratch_offense_position;
+            if (scratch_offense_position > linear_encoder_range) {
+                // the desired position is out of bounds, which should be impossible
+                // the only thing we can do here is go to a shutdown state
+                main_state = WAIT;
+                desired_offense_position = 0;
+                P1->OUT |= BIT0;
+            } else {
+                desired_offense_position = scratch_offense_position;
+            }
             break;
         case 7:
-            // offense rotational state
-            offense_rotstate = c & UART_DATA_BITMASK;
+            // special byte codes begin with 111, so they'll switch to this case
+            switch(c) {
+            case WAIT_CODE:
+                main_state = WAIT;
+                break;
+            case CALIBRATE_CODE:
+                main_state = CALIBRATE;
+                break;
+            case PLAY_CODE:
+                main_state = PLAY;
+                break;
+            default:
+                // normal byte for offense rotational state
+                offense_rotstate = c & UART_DATA_BITMASK;
+                break;
+            }
             break;
         default:
             // should never happen

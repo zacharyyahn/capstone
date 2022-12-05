@@ -16,7 +16,18 @@ enum rotational_state {
 };
 
 // last 5 bits of a UART character carry the data, first 3 carry the index
-#define UART_DATA_BITMASK   0b00011111
+#define UART_DATA_BITMASK   0x1F
+
+// special byte codes to control top-level state
+#define WAIT_CODE           0xFF
+#define CALIBRATE_CODE      0xFE
+#define PLAY_CODE           0xFD
+
+enum main_state_enum {
+    WAIT,
+    CALIBRATE,
+    PLAY,
+};
 
 /*
  * Configures eUSCI_A0 in UART mode
