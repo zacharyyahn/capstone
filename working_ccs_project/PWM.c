@@ -77,9 +77,19 @@ void SetDuty_LDef (uint16_t duty) {
     TIMER_A0->CCR[LDEF_CCR_INDEX] = duty;
 }
 
+void Stop_LDef () {
+    LINEAR_CONTROL_PORT->OUT &= ~(LDEF_IN1_BIT | LDEF_IN2_BIT);
+    SetDuty_LDef(0);
+}
+
 void SetDuty_LOff (uint16_t duty) {
     if (duty >= 11999) return;
     TIMER_A0->CCR[LOFF_CCR_INDEX] = duty;
+}
+
+void Stop_LOff () {
+    LINEAR_CONTROL_PORT->OUT &= ~(LOFF_IN1_BIT | LOFF_IN2_BIT);
+    SetDuty_LOff(0);
 }
 
 void SetDuty_RDef (uint16_t duty) {
@@ -87,21 +97,31 @@ void SetDuty_RDef (uint16_t duty) {
     TIMER_A0->CCR[RDEF_CCR_INDEX] = duty;
 }
 
+void Stop_RDef () {
+    ROTATIONAL_CONTROL_PORT->OUT &= ~(RDEF_IN1_BIT | RDEF_IN2_BIT);
+    SetDuty_RDef(0);
+}
+
 void SetDuty_ROff (uint16_t duty) {
     if (duty >= 11999) return;
     TIMER_A0->CCR[ROFF_CCR_INDEX] = duty;
+}
+
+void Stop_ROff () {
+    ROTATIONAL_CONTROL_PORT->OUT &= ~(ROFF_IN1_BIT | ROFF_IN2_BIT);
+    SetDuty_ROff(0);
 }
 
 // Setter for direction flag for rotational defense motor
 void SetDir_RDef (enum direction dir) {
     switch (dir) {
     case FORWARD:
-        RDef_PWM_Pin = RDEF_IN1_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN2_BIT;
+        RDef_PWM_Pin = RDEF_IN1_BIT;
         break;
     case REVERSE:
-        RDef_PWM_Pin = RDEF_IN2_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN1_BIT;
+        RDef_PWM_Pin = RDEF_IN2_BIT;
         break;
     default:
         break;
@@ -112,12 +132,12 @@ void SetDir_RDef (enum direction dir) {
 void SetDir_ROff (enum direction dir) {
     switch (dir) {
     case FORWARD:
-        ROff_PWM_Pin = ROFF_IN1_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN2_BIT;
+        ROff_PWM_Pin = ROFF_IN1_BIT;
         break;
     case REVERSE:
-        ROff_PWM_Pin = ROFF_IN2_BIT;
         ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN1_BIT;
+        ROff_PWM_Pin = ROFF_IN2_BIT;
         break;
     default:
         break;
@@ -128,12 +148,12 @@ void SetDir_ROff (enum direction dir) {
 void SetDir_LDef (enum direction dir) {
     switch (dir) {
     case FORWARD:
-        LDef_PWM_Pin = LDEF_IN1_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN2_BIT;
+        LDef_PWM_Pin = LDEF_IN1_BIT;
 		break;
     case REVERSE:
-        LDef_PWM_Pin = LDEF_IN2_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN1_BIT;
+        LDef_PWM_Pin = LDEF_IN2_BIT;
 		break;
 	default:
 		break;
@@ -144,12 +164,12 @@ void SetDir_LDef (enum direction dir) {
 void SetDir_LOff (enum direction dir) {
     switch (dir) {
     case FORWARD:
-        LOff_PWM_Pin = LOFF_IN1_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN2_BIT;
+        LOff_PWM_Pin = LOFF_IN1_BIT;
 		break;
     case REVERSE:
-        LOff_PWM_Pin = LOFF_IN2_BIT;
         LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN1_BIT;
+        LOff_PWM_Pin = LOFF_IN2_BIT;
 		break;
 	default:
 		break;

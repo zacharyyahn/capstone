@@ -50,5 +50,10 @@ void SetDir_LOff(enum direction dir);
 void SetDir_RDef(enum direction dir);
 void SetDir_ROff(enum direction dir);
 
+void Stop_LDef();
+void Stop_LOff();
+void Stop_RDef();
+void Stop_ROff();
+
 
 #endif /* PWM_H_ */
