@@ -35,6 +35,7 @@ enum main_state_enum {
  * Baud rate 115,200
  * Rx interrupt enabled only
  */
+void UART_ToPi (char* toSend);
 void UART_A0_Init(void);
 void UART_A0_OutChar(char c);
 
