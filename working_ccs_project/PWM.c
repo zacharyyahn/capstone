@@ -78,8 +78,8 @@ void SetDuty_LDef (uint16_t duty) {
 }
 
 void Stop_LDef () {
-    LINEAR_CONTROL_PORT->OUT &= ~(LDEF_IN1_BIT | LDEF_IN2_BIT);
     SetDuty_LDef(0);
+    LINEAR_CONTROL_PORT->OUT &= ~(LDEF_IN1_BIT | LDEF_IN2_BIT);
 }
 
 void SetDuty_LOff (uint16_t duty) {
@@ -88,8 +88,8 @@ void SetDuty_LOff (uint16_t duty) {
 }
 
 void Stop_LOff () {
-    LINEAR_CONTROL_PORT->OUT &= ~(LOFF_IN1_BIT | LOFF_IN2_BIT);
     SetDuty_LOff(0);
+    LINEAR_CONTROL_PORT->OUT &= ~(LOFF_IN1_BIT | LOFF_IN2_BIT);
 }
 
 void SetDuty_RDef (uint16_t duty) {
@@ -98,8 +98,8 @@ void SetDuty_RDef (uint16_t duty) {
 }
 
 void Stop_RDef () {
-    ROTATIONAL_CONTROL_PORT->OUT &= ~(RDEF_IN1_BIT | RDEF_IN2_BIT);
     SetDuty_RDef(0);
+    ROTATIONAL_CONTROL_PORT->OUT &= ~(RDEF_IN1_BIT | RDEF_IN2_BIT);
 }
 
 void SetDuty_ROff (uint16_t duty) {
@@ -108,8 +108,8 @@ void SetDuty_ROff (uint16_t duty) {
 }
 
 void Stop_ROff () {
-    ROTATIONAL_CONTROL_PORT->OUT &= ~(ROFF_IN1_BIT | ROFF_IN2_BIT);
     SetDuty_ROff(0);
+    ROTATIONAL_CONTROL_PORT->OUT &= ~(ROFF_IN1_BIT | ROFF_IN2_BIT);
 }
 
 // Setter for direction flag for rotational defense motor
