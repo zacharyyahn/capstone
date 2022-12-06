@@ -17,11 +17,8 @@
 #include "CortexM.h"
 #include "Encoder.h"
 
-#define LINEAR_ENCODER_COUNT_MAX        765
-#define ROTATIONAL_ENCODER_COUNT_90DEG  150
-
 // commands from Pi
-extern int16_t desired_defense_position, desired_offense_position;
+extern uint16_t desired_defense_position, desired_offense_position;
 extern enum rotational_state defense_rotstate, offense_rotstate;
 
 // actual motor states
@@ -30,13 +27,46 @@ extern struct encoder LDef_Encoder, LOff_Encoder, RDef_Encoder, ROff_Encoder;
 // limit switches
 uint8_t switch_image;
 
+// encoder count ranges, measured by calibration routine
+uint16_t linear_encoder_range;
+uint16_t rotational_encoder_360_deg;
+
+// top-level state
+extern enum main_state_enum main_state;
+
 unsigned int ProportionalControl (int error) {
     unsigned int abs_error = error >= 0 ? error : 0-error;
-    if (abs_error < 20) {
+    if (abs_error < 5) {
         return 0;
-    } else {
+    } else if (abs_error >= 200) {
         return 6000;
+    } else {
+        // min speed 4000 at 5 error, max speed 6000 at 200 error
+        return 4000 + (abs_error - 5 ) * 2000 / 195;
     }
+}
+
+void CalibrateEncoders() {
+    // find 0 position
+    SetDir_LOff(REVERSE);
+    SetDuty_LOff(4000);
+
+    while (!(ReadSwitches() & LLSOFF1_BIT)) { }
+    Stop_LOff();
+    LOff_Encoder.count = 0;
+
+    // find max position
+    SetDir_LOff(FORWARD);
+    SetDuty_LOff(4000);
+
+    while (!(ReadSwitches() & LLSOFF2_BIT)) { }
+    Stop_LOff();
+    linear_encoder_range = LOff_Encoder.count;
+
+    char out_buffer[2];
+    out_buffer[0] = (char) linear_encoder_range;
+    out_buffer[1] = (char) (linear_encoder_range >> 8);
+    UART_ToPi(out_buffer);
 }
 
 int main(void)
@@ -53,6 +83,7 @@ int main(void)
     P1->DIR |= BIT0;
     P1->SEL0 &= ~BIT0;
     P1->SEL1 &= ~BIT0;
+    P1->OUT &= ~BIT0;
 
     Clock_Init48MHz();
     PWM_Init();
@@ -67,37 +98,44 @@ int main(void)
     Stop_ROff();
     Stop_LDef();
     Stop_RDef();
+    main_state = WAIT;
 
-    SetDir_LOff(REVERSE);
-    SetDuty_LOff(2000);
-
-
-    while (!(ReadSwitches() & LLSOFF1_BIT)) { }
-
-    Stop_LOff();
-
-    int target = 350;
 
     while (1) {
-        // calibrate encoder counts from limit switches
-        switch_image = ReadSwitches();
-        if (switch_image & RLSDEF_BIT)  RDef_Encoder.count = 0;
-        if (switch_image & RLSOFF_BIT)  ROff_Encoder.count = 0;
-        if (switch_image & LLSDEF1_BIT) LDef_Encoder.count = 0;
-        if (switch_image & LLSDEF2_BIT) LDef_Encoder.count = LINEAR_ENCODER_COUNT_MAX;
-        if (switch_image & LLSOFF1_BIT) LOff_Encoder.count = 0;
-        if (switch_image & LLSOFF2_BIT) LOff_Encoder.count = LINEAR_ENCODER_COUNT_MAX;
+        // wait for start signal from Pi
+        while (main_state == WAIT) {
+            Stop_LOff();
+            Stop_ROff();
+            Stop_LDef();
+            Stop_RDef();
+        }
 
-        SetDir_LOff(LOff_Encoder.count < target ? FORWARD : REVERSE);
-        SetDuty_LOff(ProportionalControl(LOff_Encoder.count - target));
+        // calibration routine
+        if (main_state != CALIBRATE) break;
+        CalibrateEncoders();
+        while (main_state == CALIBRATE) {
+            SetDir_LOff(LOff_Encoder.count < (linear_encoder_range >> 1) ? FORWARD : REVERSE);
+            SetDuty_LOff(ProportionalControl(LOff_Encoder.count - (linear_encoder_range >> 1)));
+        }
 
-        //if (desired_defense_position == 4000 && defense_rotstate == BLOCK &&
-        //        desired_offense_position == 4000 && offense_rotstate == BLOCK) {
-        if (switch_image) {
-            P1->OUT |= BIT0;
-        } else {
-            P1->OUT &= ~BIT0;
+        // play the game
+        while (main_state == PLAY) {
+            // calibrate encoder counts from limit switches
+            switch_image = ReadSwitches();
+            if (switch_image & RLSDEF_BIT)  RDef_Encoder.count = 0;
+            if (switch_image & RLSOFF_BIT)  ROff_Encoder.count = 0;
+            if (switch_image & LLSDEF1_BIT) LDef_Encoder.count = 0;
+            if (switch_image & LLSDEF2_BIT) LDef_Encoder.count = linear_encoder_range;
+            if (switch_image & LLSOFF1_BIT) LOff_Encoder.count = 0;
+            if (switch_image & LLSOFF2_BIT) LOff_Encoder.count = linear_encoder_range;
+
+            SetDir_LOff(LOff_Encoder.count < desired_offense_position ? FORWARD : REVERSE);
+            SetDuty_LOff(ProportionalControl(LOff_Encoder.count - desired_offense_position));
         }
     }
+    Stop_LOff();
+    Stop_ROff();
+    Stop_LDef();
+    Stop_RDef();
 }
 

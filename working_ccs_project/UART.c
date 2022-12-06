@@ -10,9 +10,23 @@
 
 // desired player state information from Pi
 // scratch values are used while positions are being built across multiple bytes
-int16_t scratch_offense_position, scratch_defense_position;
-int16_t desired_offense_position, desired_defense_position;
+uint16_t scratch_offense_position, scratch_defense_position;
+uint16_t desired_offense_position, desired_defense_position;
+char tx_buffer[2];
+uint8_t bytes_to_send = 0;
+
 enum rotational_state offense_rotstate, defense_rotstate;
+enum main_state_enum main_state;
+
+// maximum linear encoder count for bounds checking
+extern uint16_t linear_encoder_range;
+
+void UART_ToPi (char *toSend) {
+    tx_buffer[0] = toSend[0];
+    tx_buffer[1] = toSend[1];
+    bytes_to_send = 2;
+    EUSCI_A0->IFG |= EUSCI_A_IFG_TXIFG;
+}
 
 // Initializes UART mode for eUSCI_A0; follows procedure from technical reference (p. 728)
 void UART_A0_Init(void) {
@@ -51,7 +65,7 @@ void UART_A0_Init(void) {
 
     // Enable receive Rx interrupt (bit 0); technical reference (p. 752)
     EUSCI_A0->IE &= ~0x000F;
-    EUSCI_A0->IE |= 0x0001;
+    EUSCI_A0->IE |= (EUSCI_A_IE_TXIE | EUSCI_A_IE_RXIE);
 
 
 }
@@ -66,8 +80,8 @@ void UART_A0_OutChar(char letter) {
 // Handler for EUSCIA0 interrupts
 // Currently only supports Rx interrupts
 void EUSCIA0_IRQHandler(void) {
-    // Entered on Rx interrupt
-    if (EUSCI_A0->IFG & 0x01) {
+    // Entered on Rx interruptS
+    if (EUSCI_A0->IFG & EUSCI_A_IFG_RXIFG) {
 
         // Rx char stored in RXBUF at time of flag set
         char c = ((char) (EUSCI_A0->RXBUF));
@@ -88,7 +102,15 @@ void EUSCIA0_IRQHandler(void) {
         case 2:
             // most significant 5-bit word of defense position
             scratch_defense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
-            desired_defense_position = scratch_defense_position;
+            if (scratch_defense_position > linear_encoder_range) {
+                // the desired position is out of bounds, which should be impossible
+                // the only thing we can do here is go to a shutdown state
+                main_state = WAIT;
+                desired_defense_position = 0;
+                P1->OUT |= BIT0;
+            } else {
+                desired_defense_position = scratch_defense_position;
+            }
             break;
         case 3:
             // defense rotational state
@@ -105,11 +127,33 @@ void EUSCIA0_IRQHandler(void) {
         case 6:
             // most significant 5-bit word of offense position
             scratch_offense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
-            desired_offense_position = scratch_offense_position;
+            if (scratch_offense_position > linear_encoder_range) {
+                // the desired position is out of bounds, which should be impossible
+                // the only thing we can do here is go to a shutdown state
+                main_state = WAIT;
+                desired_offense_position = 0;
+                P1->OUT |= BIT0;
+            } else {
+                desired_offense_position = scratch_offense_position;
+            }
             break;
         case 7:
-            // offense rotational state
-            offense_rotstate = c & UART_DATA_BITMASK;
+            // special byte codes begin with 111, so they'll switch to this case
+            switch(c) {
+            case WAIT_CODE:
+                main_state = WAIT;
+                break;
+            case CALIBRATE_CODE:
+                main_state = CALIBRATE;
+                break;
+            case PLAY_CODE:
+                main_state = PLAY;
+                break;
+            default:
+                // normal byte for offense rotational state
+                offense_rotstate = c & UART_DATA_BITMASK;
+                break;
+            }
             break;
         default:
             // should never happen
@@ -117,7 +161,15 @@ void EUSCIA0_IRQHandler(void) {
         }
 
         // Reset flag
-        EUSCI_A0->IFG &= ~0x01;
+        EUSCI_A0->IFG &= ~EUSCI_A_IFG_RXIFG;
+    }
+    if (EUSCI_A0->IFG & EUSCI_A_IFG_TXIFG) {
+        // Handle Tx
+        if (bytes_to_send) {
+            EUSCI_A0->TXBUF = tx_buffer[2 - bytes_to_send];
+            bytes_to_send--;
+        }
+        EUSCI_A0->IFG &= ~EUSCI_A_IFG_TXIFG;
     }
 }
 
