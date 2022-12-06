@@ -1,7 +1,9 @@
+#include <errno.h>
 #include "plan.h"
 
 struct rod rods[NUM_RODS];
 int msp_fd;
+__u16 linear_encoder_range;
 
 void init_plan() {
     // common attributes
@@ -17,14 +19,22 @@ void init_plan() {
     // unique x positions
     rods[0].x = DEFENSE_X;
     rods[1].x = OFFENSE_X;
-
+    
+    
     // set up serial communication to MSP
     // hopefully this is the right device, might be ACM1 instead
-    msp_fd = open("/dev/ttyACM0", O_WRONLY | O_NONBLOCK);
-    if (msp_fd < 0) {
-        perror("error opening serial port to msp");
-        exit(1);
+    printf("waiting for MSP to open...");
+    msp_fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
+    while (msp_fd < 0) {
+        // spin wait for msp to be ready
+        if (errno != EBUSY) {
+            perror("error opening serial port to msp");
+            exit(1);
+        } else {
+            msp_fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
+        }
     }
+    printf(" done\n");
 
     struct termios term;
     if (tcgetattr(msp_fd, &term)) {
@@ -49,6 +59,29 @@ void init_plan() {
     if (tcsetattr(msp_fd, TCSANOW, &term)) {
         perror("error setting termios attributes");
         exit(1);
+    }
+
+    // calibrate encoders
+    printf("running encoder calibration routine... ");
+    char buf = CALIBRATE_CODE;
+    if (write(msp_fd, &buf, 1) <= 0) {
+        perror("error writing bytes to msp");
+    }
+    
+    if (read(msp_fd, &linear_encoder_range, 2) != 2) {
+        perror("error reading bytes from msp");
+        shutdown_plan();
+        exit(1);
+    }
+    printf("done\n");
+    printf("max encoder count from msp: %d\n", linear_encoder_range);
+}
+
+void start_msp() {
+    printf("starting msp\n");
+    char buf = PLAY_CODE;
+    if (write(msp_fd, &buf, 1) <= 0) {
+        perror("error writing bytes to msp");
     }
 }
 
@@ -108,36 +141,36 @@ void move_player_to_y (struct rod *r, float y) {
 // send the desired state to the MSP
 void command_msp() {
     for (int i = 0; i < NUM_RODS; i++) {
-        printf("rod %d:\tstate: ", i);
+ //       printf("rod %d:\tstate: ", i);
         switch (rods[i].rot_state) {
         case BLOCK:
-            printf("BLOCK\t");
+ //           printf("BLOCK\t");
             break;
         case READY:
-            printf("READY\t");
+ //           printf("READY\t");
             break;
         case SHOOT:
-            printf("SHOOT\t");
+ //           printf("SHOOT\t");
             break;
         case FANCY_SHOOT:
-            printf("FANCY\t");
+ //           printf("FANCY\t");
             break;
         case SPIN:
-            printf("SPIN \t");
+ //           printf("SPIN \t");
             break;
         default:
             break;
         }
-        printf("y: %f\n", rods[i].y);
+ //       printf("y: %f\n", rods[i].y);
     }
-    printf("\n");
 
     char buf[8];
     char index, data;
     int encoder_count_y;
     for (int r = 0; r < NUM_RODS; r++) {
         // assume msp y axis is opposite of table space y axis
-        encoder_count_y = ENCODER_COUNT_TRAVEL * (1 - rods[r].y / rods[r].travel);
+        encoder_count_y = linear_encoder_range * (1 - rods[r].y / rods[r].travel);
+        printf("rod %d encoder count: %d\n", r, encoder_count_y);
         
         // linear data, from least to most significant 5-bit chunk
         for (int char_i = 0; char_i < 3; char_i++) {
@@ -151,9 +184,10 @@ void command_msp() {
         data  = rods[r].rot_state;
         buf[4*r + 3] = index | data;
     }
-    if (write(msp_fd, buf, 8)) {
+    if (write(msp_fd, buf, 8) <= 0) {
         perror("error writing bytes to msp");
     }
+//    printf("\n");
 }
 
 // Plan where to move the rods 
@@ -234,6 +268,17 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
     command_msp();
 }
 
+void shutdown_plan() {
+    char buf = WAIT_CODE;
+    if (write(msp_fd, &buf, 1) <= 0) {
+        perror("error writing bytes to msp");
+    }
+
+    if (close(msp_fd)) {
+        perror("error closing msp");
+    }
+}
+
 void print_players(struct rod *r, int rod_num) {
     printf("----------- Rod %d State -----------\n", rod_num);
     printf("Desired position: (%f, %f)\n", r->x, r->y);
@@ -246,10 +291,5 @@ void print_players(struct rod *r, int rod_num) {
         }
     }
     printf("]\n----------- Rod %d State -----------\n", rod_num);
-}
-
-//TODO: show where the players will move
-void plot_player_pos(__u8* filtered, int rod_num, float rod_pos) {
-    
 }
 

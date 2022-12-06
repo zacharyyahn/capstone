@@ -29,6 +29,7 @@
 #endif
 
 #include "yay.h"
+#include "plan.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -312,7 +313,7 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
             break;
         case SDL_QUIT:
             quit = 1;
-        break;
+            break;
         case SDL_VIDEOEXPOSE:
             SDL_DisplayYUVOverlay(my_overlay, &video_rect);
             break;
@@ -320,6 +321,9 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
             switch (event.key.keysym.sym) {
             case SDLK_q:
                 quit = 1;
+                break;
+            case SDLK_RETURN:
+                start_msp();
                 break;
             case SDLK_SPACE:
                 do_output = 1 - do_output;

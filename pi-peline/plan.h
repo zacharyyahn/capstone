@@ -12,13 +12,19 @@
 // in mm/s
 #define MAX_ONCOMING_SHOOT_SPEED        100.0
 #define MIN_ONCOMING_PLAN_USE_VEL_SPEED 100.0
-typedef enum {
+
+// special byte codes for commanding top-level msp state
+#define WAIT_CODE       0xFF
+#define CALIBRATE_CODE  0xFE
+#define PLAY_CODE       0xFD
+
+enum rotational_state {
     BLOCK,
     READY,
     SHOOT,
     FANCY_SHOOT,
     SPIN,
-} rotational_state;
+};
 
 struct rod {
     // constants
@@ -36,7 +42,7 @@ struct rod {
     float y;
 
     // action state of the rotational motor
-    rotational_state rot_state;
+    enum rotational_state rot_state;
 };
 
 struct ball_state {
@@ -48,9 +54,17 @@ struct ball_state {
 
 void init_plan();
 
+void start_msp();
+
+void return_to_default();
+
+void command_msp();
+
 void plot_player_pos(__u8* filtered, int rod_num, float rod_pos);
 
 void plan_rod_movement(struct ball_state *b, int have_ball_pos);
+
+void shutdown_plan();
 
 void print_players(struct rod *r, int rod_num);
 

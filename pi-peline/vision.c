@@ -278,8 +278,8 @@ long relative_position (struct xy *top_left, struct xy *top_right, struct xyf *b
 }
 
 int main () {
+    //init_plan();
     init_SDL();
-    init_plan();
 
     /******************* SET UP IMAGE PROCESSING *******************/
     __u8 losses[WIDTH*HEIGHT];
@@ -487,7 +487,7 @@ int main () {
         b.y = rel_pos.y;
         b.v_x = vel.x * 1000000;  // convert velocity to mm/s
         b.v_y = vel.y * 1000000;
-        plan_rod_movement(&b, have_prev_pos);
+       // plan_rod_movement(&b, have_prev_pos);
 
 	if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, exists)) return -1;
         handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
@@ -497,6 +497,8 @@ int main () {
             return -1;
         }
     }  // end main loop
+
+    shutdown_plan();
 
     if (ioctl(v0, VIDIOC_STREAMOFF, &buf_type)) {
         perror("error stopping stream");
