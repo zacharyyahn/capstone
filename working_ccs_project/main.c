@@ -41,15 +41,15 @@ unsigned int ProportionalControl (int error) {
     } else if (abs_error >= 200) {
         return 6000;
     } else {
-        // min speed 2000 at 10 error, max speed 6000 at 200 error
-        return 2000 + (abs_error - 10 ) * 4000 / 190;
+        // min speed 4000 at 5 error, max speed 6000 at 200 error
+        return 4000 + (abs_error - 5 ) * 2000 / 195;
     }
 }
 
 void CalibrateEncoders() {
     // find 0 position
     SetDir_LOff(REVERSE);
-    SetDuty_LOff(2000);
+    SetDuty_LOff(4000);
 
     while (!(ReadSwitches() & LLSOFF1_BIT)) { }
     Stop_LOff();
@@ -57,11 +57,16 @@ void CalibrateEncoders() {
 
     // find max position
     SetDir_LOff(FORWARD);
-    SetDuty_LOff(2000);
+    SetDuty_LOff(4000);
 
     while (!(ReadSwitches() & LLSOFF2_BIT)) { }
     Stop_LOff();
     linear_encoder_range = LOff_Encoder.count;
+
+    char out_buffer[2];
+    out_buffer[0] = (char) linear_encoder_range;
+    out_buffer[1] = (char) (linear_encoder_range >> 8);
+    UART_ToPi(out_buffer);
 }
 
 int main(void)

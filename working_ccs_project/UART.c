@@ -25,6 +25,7 @@ void UART_ToPi (char *toSend) {
     tx_buffer[0] = toSend[0];
     tx_buffer[1] = toSend[1];
     bytes_to_send = 2;
+    EUSCI_A0->IFG |= EUSCI_A_IFG_TXIFG;
 }
 
 // Initializes UART mode for eUSCI_A0; follows procedure from technical reference (p. 728)
