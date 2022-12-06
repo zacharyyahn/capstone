@@ -51,9 +51,12 @@ extern int loss_contrast_booster;
 extern int ball_exists_loss_threshold;
 extern int ball_exists_calibrate;
 
-extern __u8 corner_y;
-extern __u8 corner_u;
-extern __u8 corner_v;
+extern __u8 left_corner_y;
+extern __u8 left_corner_u;
+extern __u8 left_corner_v;
+extern __u8 right_corner_y;
+extern __u8 right_corner_u;
+extern __u8 right_corner_v;
 extern int corner_loss_threshold;
 extern int corner_threshold_calibrate;
 
@@ -61,18 +64,17 @@ extern int quit;
 extern int do_output;
 // end globals
 
-typedef enum {
+enum {
     SET_BALL,
-    SET_CORNER,
-} CLICK_MODE;
-CLICK_MODE click_mode = SET_BALL;
+    SET_LEFT_CORNER,
+    SET_RIGHT_CORNER,
+} click_mode = SET_BALL;
 
-typedef enum {
+enum {
     COLOR,
     LOSS,
     FILTER,
-} OUTPUT_MODE;
-OUTPUT_MODE output_mode = COLOR;
+} output_mode = COLOR;
 
 SDL_Surface     *screen;
 SDL_Event       event;
@@ -294,11 +296,17 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                     target_v = buf[(color_i << 1) + 3];
                     printf("setting target YUV to %d, %d, %d\n", target_y, target_u, target_v);
                     break;
-                case SET_CORNER:
-                    corner_y = buf[pixel_i << 1];
-                    corner_u = buf[(color_i << 1) + 1];
-                    corner_v = buf[(color_i << 1) + 3];
-                    printf("setting corner YUV to %d, %d, %d\n", corner_y, corner_u, corner_v);
+                case SET_LEFT_CORNER:
+                    left_corner_y = buf[pixel_i << 1];
+                    left_corner_u = buf[(color_i << 1) + 1];
+                    left_corner_v = buf[(color_i << 1) + 3];
+                    printf("setting left corner YUV to %d, %d, %d\n", left_corner_y, left_corner_u, left_corner_v);
+                    break;
+                case SET_RIGHT_CORNER:
+                    right_corner_y = buf[pixel_i << 1];
+                    right_corner_u = buf[(color_i << 1) + 1];
+                    right_corner_v = buf[(color_i << 1) + 3];
+                    printf("setting right corner YUV to %d, %d, %d\n", right_corner_y, right_corner_u, right_corner_v);
                     break;
                 default:
                     break;
@@ -331,8 +339,11 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
             case SDLK_b:
                 click_mode = SET_BALL;
                 break;
-            case SDLK_c:
-                click_mode = SET_CORNER;
+            case SDLK_l:
+                click_mode = SET_LEFT_CORNER;
+                break;
+            case SDLK_r:
+                click_mode = SET_RIGHT_CORNER;
                 break;
 
             case SDLK_0:
@@ -416,15 +427,19 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
 }
 
 int output_SDL (__u8 *image, __u8 *losses, __u8 *filtered) {
-    char caption[32];
+    char caption[64];
     int threshold = corner_threshold_calibrate ? corner_loss_threshold : ball_exists_loss_threshold;
     switch (click_mode) {
     case SET_BALL:
         sprintf(caption, "mode: ball, threshold: %d", threshold);
         SDL_WM_SetCaption(caption, NULL);
         break;
-    case SET_CORNER:
-        sprintf(caption, "mode: corner, threshold: %d", threshold);
+    case SET_LEFT_CORNER:
+        sprintf(caption, "mode: left corner, threshold: %d", threshold);
+        SDL_WM_SetCaption(caption, NULL);
+        break;
+    case SET_RIGHT_CORNER:
+        sprintf(caption, "mode: right corner, threshold: %d", threshold);
         SDL_WM_SetCaption(caption, NULL);
         break;
     default:

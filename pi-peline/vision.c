@@ -27,9 +27,6 @@
 #define CORNER_WIDTH            300
 #define CORNER_HEIGHT           200
 #define CORNER_LOSS_THRESHOLD   corner_loss_threshold
-#define CORNER_Y                corner_y
-#define CORNER_U                corner_u
-#define CORNER_V                corner_v
 
 #define MAX_INTERPOLATED_FRAMES 3
 
@@ -44,10 +41,13 @@ int ball_exists_loss_threshold = 12;
 int ball_exists_expected_pixels = 50;
 int ball_exists_calibrate = 0;
 
-__u8 corner_y = 255;
-__u8 corner_u = 128;
-__u8 corner_v = 128;
-int corner_loss_threshold = 20;
+__u8 left_corner_y = 255;
+__u8 left_corner_u = 128;
+__u8 left_corner_v = 128;
+__u8 right_corner_y = 255;
+__u8 right_corner_u = 128;
+__u8 right_corner_v = 128;
+int corner_loss_threshold = 15;
 int corner_threshold_calibrate = 0;
 
 int quit = 0;
@@ -64,15 +64,35 @@ struct xyf {
     float y;
 };
 
-int ball_exists(__u8 *losses, __u8 *exists) {
+int ball_exists(__u8 *losses, __u8 *exists, struct xy *bottom_left, struct xy *bottom_right) {
+    struct xy top_left, top_right;
+    top_left.x = bottom_left->x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right->y - bottom_left->y);
+    top_left.y = bottom_left->y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left->x - bottom_right->x);
+    top_right.x = bottom_right->x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right->y - bottom_left->y);
+    top_right.y = bottom_right->y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left->x - bottom_right->x);   
+
+    int min_y = top_left.y < top_right.y ? top_left.y : top_right.y;
+    int max_y = bottom_left->y > bottom_right->y ? bottom_left->y : bottom_right->y;
+    int min_x = top_left.x < bottom_left->x ? top_left.x : bottom_left->x;
+    int max_x = top_right.x > bottom_right->x ? top_right.x : bottom_right->x;
+
+    if (min_y < 0) min_y = 0;
+    if (min_x < 0) min_x = 0;
+    if (max_y >= HEIGHT) max_y = HEIGHT-1;
+    if (max_x >= WIDTH) max_x = WIDTH-1;
+
+    memset(exists, 0x00, WIDTH*HEIGHT);
     int num_pixels = 0;
-    int i;
-    for (i = 0; i < HEIGHT * WIDTH; i++) {
-        if (losses[i] < ball_exists_loss_threshold) {
-            num_pixels++;
-            if (1 /*ball_exists_calibrate*/ ) exists[i] = 0x80;
-        } else {
-            if (1 /*ball_exists_calibrate*/ ) exists[i] = 0x00;
+    int i, j;
+    for (i = min_y; i <= max_y; i++) {
+        if (i >= HEIGHT) printf("bad i value!!! %d\n", i);
+        for (j = min_x; j <= max_x; j++) {
+            if (j >= WIDTH) printf("bad j value!!! %d\n", j);
+            exists[i*WIDTH + j] = 0x40;
+            if (losses[i*WIDTH + j] < ball_exists_loss_threshold) {
+                num_pixels++;
+                exists[i*WIDTH + j] = 0x80;
+            }
         }
     }
     if (ball_exists_calibrate) printf("num of ball pixels found: %d\n", num_pixels);
@@ -85,18 +105,36 @@ int ball_exists(__u8 *losses, __u8 *exists) {
  * lots of redundant code with ball_exists in here, these should probably be combined if we go
  * with this approach. Just wanted to keep things separate for initial testing
  */
-long find_center(__u8 *exists, struct xyf *ball_pos) {
+long find_center(__u8 *exists, struct xyf *ball_pos, struct xy *bottom_left, struct xy *bottom_right) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
+    struct xy top_left, top_right;
+    top_left.x = bottom_left->x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right->y - bottom_left->y);
+    top_left.y = bottom_left->y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left->x - bottom_right->x);
+    top_right.x = bottom_right->x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right->y - bottom_left->y);
+    top_right.y = bottom_right->y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left->x - bottom_right->x);   
+
+    int min_y = top_left.y < top_right.y ? top_left.y : top_right.y;
+    int max_y = bottom_left->y > bottom_right->y ? bottom_left->y : bottom_right->y;
+    int min_x = top_left.x < bottom_left->x ? top_left.x : bottom_left->x;
+    int max_x = top_right.x > bottom_right->x ? top_right.x : bottom_right->x;
+
+    if (min_y < 0) min_y = 0;
+    if (min_x < 0) min_x = 0;
+    if (max_y >= HEIGHT) max_y = HEIGHT-1;
+    if (max_x >= WIDTH) max_x = WIDTH-1;
+
     int num_pixels = 0;
     int x_sum = 0, y_sum = 0;
-    int i;
-    for (i = 0; i < HEIGHT * WIDTH; i++) {
-        if (exists[i] > 0) {
-            num_pixels++;
-            x_sum += i % WIDTH;
-            y_sum += i / WIDTH;
+    int i, j;
+    for (i = min_y; i <= max_y; i++) {
+        for (j = min_x; j <= max_x; j++) {
+            if (exists[i*WIDTH + j] == 0x80) {
+                num_pixels++;
+                x_sum += j;
+                y_sum += i;
+            }
         }
     }
     ball_pos->x = ((float) x_sum) / num_pixels;
@@ -108,75 +146,75 @@ long find_center(__u8 *exists, struct xyf *ball_pos) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
-long find_corners (__u8 *image, struct xy *top_left, struct xy *top_right, __u8 *losses) {
+long find_corners (__u8 *image, struct xy *bottom_left, struct xy *bottom_right, __u8 *losses) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
     // track min-loss position in the return structs
-    top_left->x = 0;
-    top_left->y = 0;
-    top_right->x = WIDTH-1;
-    top_right->y = 0;
+    bottom_left->x = 0;
+    bottom_left->y = HEIGHT-1;
+    bottom_right->x = WIDTH-1;
+    bottom_right->y = HEIGHT-1;
 
-    // top-left corner
+    // bottom-left corner
     int i, j, pix0, pix1, C_loss;
-    for (i = 0; i < CORNER_HEIGHT; i++) {
+    for (i = HEIGHT-1; i >= HEIGHT - CORNER_HEIGHT; i--) {
         for (j = 0; j < CORNER_WIDTH; j += 2) {
             pix0 = (i*WIDTH + j) << 1;
             pix1 = pix0 + 2;
 
-            C_loss = (CORNER_U > image[pix0+1] ? CORNER_U - image[pix0+1] : image[pix0+1] - CORNER_U) +
-                     (CORNER_V > image[pix0+3] ? CORNER_V - image[pix0+3] : image[pix0+3] - CORNER_V);
+            C_loss = (left_corner_u > image[pix0+1] ? left_corner_u - image[pix0+1] : image[pix0+1] - left_corner_u) +
+                     (left_corner_v > image[pix0+3] ? left_corner_v - image[pix0+3] : image[pix0+3] - left_corner_v);
 
             // check rightmost pixel first
-            if (     (CORNER_Y > image[pix1]   ? CORNER_Y - image[pix1]   : image[pix1]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if (i + (j + 1) > top_left->x + top_left->y) {
-                    top_left->x = j + 1;
-                    top_left->y = i;
+            if (     (left_corner_y > image[pix1]   ? left_corner_y - image[pix1]   : image[pix1]   - left_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if ((j + 1) - i > bottom_left->x - bottom_left->y) {
+                    bottom_left->x = j + 1;
+                    bottom_left->y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
             }
             // only check leftmost pixel if rightmost isn't a match
-            else if ((CORNER_Y > image[pix0]   ? CORNER_Y - image[pix0]   : image[pix0]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if (i + j > top_left->x + top_left->y) {
-                    top_left->x = j;
-                    top_left->y = i;
+            else if ((left_corner_y > image[pix0]   ? left_corner_y - image[pix0]   : image[pix0]   - left_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if (j - i > bottom_left->x - bottom_left->y) {
+                    bottom_left->x = j;
+                    bottom_left->y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
             }
         }
     }
 
-    //top-right corner
-    for (i = 0; i < CORNER_HEIGHT; i++) {
+    //bottom-right corner
+    for (i = HEIGHT-1; i >= HEIGHT - CORNER_HEIGHT; i--) {
         for (j = WIDTH - CORNER_WIDTH; j < WIDTH; j += 2) {
             pix0 = (i*WIDTH + j) << 1;
             pix1 = pix0 + 2;
 
-            C_loss = (CORNER_U > image[pix0+1] ? CORNER_U - image[pix0+1] : image[pix0+1] - CORNER_U) +
-                     (CORNER_V > image[pix0+3] ? CORNER_V - image[pix0+3] : image[pix0+3] - CORNER_V);
+            C_loss = (right_corner_u > image[pix0+1] ? right_corner_u - image[pix0+1] : image[pix0+1] - right_corner_u) +
+                     (right_corner_v > image[pix0+3] ? right_corner_v - image[pix0+3] : image[pix0+3] - right_corner_v);
 
             // check leftmost pixel first
-            if (     (CORNER_Y > image[pix0]   ? CORNER_Y - image[pix0]   : image[pix0]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if (i - j > top_right->y - top_right->x) {
-                    top_right->x = j;
-                    top_right->y = i;
+            if (     (right_corner_y > image[pix0]   ? right_corner_y - image[pix0]   : image[pix0]   - right_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if (-1*i - j > -1*bottom_right->y - bottom_right->x) {
+                    bottom_right->x = j;
+                    bottom_right->y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
             }
             // only check rightmost pixel if leftmost isn't a match
-            else if ((CORNER_Y > image[pix1]   ? CORNER_Y - image[pix1]   : image[pix1]   - CORNER_Y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if (i - (j + 1) > top_right->y - top_right->x) {
-                    top_right->x = j + 1;
-                    top_right->y = i;
+            else if ((right_corner_y > image[pix1]   ? right_corner_y - image[pix1]   : image[pix1]   - right_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
+                if (-1*i - (j + 1) > -1*bottom_right->y - bottom_right->x) {
+                    bottom_right->x = j + 1;
+                    bottom_right->y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
             }
         }
     }
 
-    losses[top_left->x + WIDTH*top_left->y] = 0xFF;
-    losses[top_right->x + WIDTH*top_right->y] = 0xFF;
+    losses[bottom_left->x + WIDTH*bottom_left->y] = 0xFF;
+    losses[bottom_right->x + WIDTH*bottom_right->y] = 0xFF;
 
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -262,16 +300,17 @@ long argmin (__u8 *filtered, struct xy *pos) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
-long relative_position (struct xy *top_left, struct xy *top_right, struct xyf *ball_pos, struct xyf *rel_pos) {
+long relative_position (struct xy *bottom_left, struct xy *bottom_right, struct xyf *ball_pos, struct xyf *rel_pos) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
-    float d_squared = (top_right->y - top_left->y) * (top_right->y - top_left->y) +
-                      (top_right->x - top_left->x) * (top_right->x - top_left->x);
-    rel_pos->x = TABLE_LENGTH / d_squared * ((top_right->x - top_left->x) * (ball_pos->x - top_left->x) +
-                                             (top_right->y - top_left->y) * (ball_pos->y - top_left->y));
-    rel_pos->y = TABLE_LENGTH / d_squared * ((top_left->y - top_right->y) * (ball_pos->x - top_left->x) +
-                                             (top_right->x - top_left->x) * (ball_pos->y - top_left->y));
+    float d_squared = (bottom_right->y - bottom_left->y) * (bottom_right->y - bottom_left->y) +
+                      (bottom_right->x - bottom_left->x) * (bottom_right->x - bottom_left->x);
+    rel_pos->x = TABLE_LENGTH / d_squared * ((bottom_right->x - bottom_left->x) * (ball_pos->x - bottom_left->x) +
+                                             (bottom_right->y - bottom_left->y) * (ball_pos->y - bottom_left->y));
+    rel_pos->y = TABLE_LENGTH / d_squared * ((bottom_left->y - bottom_right->y) * (ball_pos->x - bottom_left->x) +
+                                             (bottom_right->x - bottom_left->x) * (ball_pos->y - bottom_left->y))
+                 + TABLE_HEIGHT;
 
     clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -431,7 +470,7 @@ int main () {
     struct timeval prev_timestamp;
     int prev_framecount = -1;
     int dt, d_framecount;
-    struct xy top_left, top_right;
+    struct xy bottom_left, bottom_right;
     struct xyf ball_pos, rel_pos;
     struct xyf vel, prev_pos;
     struct ball_state b;
@@ -452,12 +491,12 @@ int main () {
         clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
         loss_function((__u8 *) cur_buf->m.userptr, losses); // printf("loss function time (ms): %d\t", loss_function(cur_buf->m.userptr, losses) / 1000000);
 
-        if (ball_exists(losses, exists)) {
+        find_corners((__u8 *) cur_buf->m.userptr, &bottom_left, &bottom_right, losses); // printf("corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &bottom_left, &bottom_right) / 1000000);
+        if (ball_exists(losses, exists, &bottom_left, &bottom_right)) {
             //filter(losses, filtered); //printf("filter time (ms): %d\t", filter(losses, filtered) / 1000000);
             //argmin(filtered, &ball_pos); //printf("argmin time (ms): %d\t", argmin(filtered, &ball_pos) / 1000000);
-            find_center(exists, &ball_pos);
-            find_corners((__u8 *) cur_buf->m.userptr, &top_left, &top_right, losses); // printf("corner time (ms): %ld\n", find_corners(cur_buf->m.userptr, &top_left, &top_right) / 1000000);
-            relative_position(&top_left, &top_right, &ball_pos, &rel_pos);  // printf("frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
+            find_center(exists, &ball_pos, &bottom_left, &bottom_right);
+            relative_position(&bottom_left, &bottom_right, &ball_pos, &rel_pos);   //printf("frame %d\t\tfound ball position (%f, %f)\n", cur_buf->sequence, rel_pos.x, rel_pos.y);
             if (have_prev_pos) {
                 vel.x = (rel_pos.x - prev_pos.x) / dt;  // units are mm/us
                 vel.y = (rel_pos.y - prev_pos.y) / dt;
@@ -481,7 +520,7 @@ int main () {
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
         //printf("total calculation time (ms): %ld\n", (end_time.tv_sec - start_time.tv_sec)*1000 + (end_time.tv_nsec - start_time.tv_nsec)/1000000);
-        //printf("top left corner at (%d, %d)\ttop right corner at (%d, %d)\n", top_left.x, top_left.y, top_right.x, top_right.y);
+        //printf("bottom left corner at (%d, %d)\tbottom right corner at (%d, %d)\n", bottom_left.x, bottom_left.y, bottom_right.x, bottom_right.y);
 
         b.x = rel_pos.x;
         b.y = rel_pos.y;
