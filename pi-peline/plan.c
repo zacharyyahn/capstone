@@ -17,8 +17,8 @@ void init_plan() {
     }
 
     // unique x positions
-    rods[0].x = DEFENSE_X;
-    rods[1].x = OFFENSE_X;
+    rods[1].x = DEFENSE_X;
+    rods[0].x = OFFENSE_X;
     
     
     // set up serial communication to MSP
@@ -104,9 +104,8 @@ float rod_intersect_from_vel (struct ball_state *b, float rod_x) {
 // find the y position of the intersection between a rod and a potential
 // shot on our goal, drawing a line from the ball to the center of the goal
 float rod_intersect_to_goal (struct ball_state *b, float rod_x) {
-    float goal_x = TABLE_LENGTH;
     float goal_y = TABLE_HEIGHT / 2;
-    return goal_y - (goal_x - rod_x) * (goal_y - b->y) / (goal_x - b->x);
+    return goal_y + (rod_x) * (b->y - goal_y) / (b->x);
 }
 
 // choose a player on rod r to cover position y, and
@@ -141,27 +140,27 @@ void move_player_to_y (struct rod *r, float y) {
 // send the desired state to the MSP
 void command_msp() {
     for (int i = 0; i < NUM_RODS; i++) {
- //       printf("rod %d:\tstate: ", i);
+        printf("rod %d:\tstate: ", i);
         switch (rods[i].rot_state) {
         case BLOCK:
- //           printf("BLOCK\t");
+            printf("BLOCK\t");
             break;
         case READY:
- //           printf("READY\t");
+            printf("READY\t");
             break;
         case SHOOT:
- //           printf("SHOOT\t");
+            printf("SHOOT\t");
             break;
         case FANCY_SHOOT:
- //           printf("FANCY\t");
+            printf("FANCY\t");
             break;
         case SPIN:
- //           printf("SPIN \t");
+            printf("SPIN \t");
             break;
         default:
             break;
         }
- //       printf("y: %f\n", rods[i].y);
+        printf("y: %f\n", rods[i].y);
     }
 
     char buf[8];
@@ -170,7 +169,7 @@ void command_msp() {
     for (int r = 0; r < NUM_RODS; r++) {
         // assume msp y axis is opposite of table space y axis
         encoder_count_y = linear_encoder_range * (1 - rods[r].y / rods[r].travel);
-        printf("rod %d encoder count: %d\n", r, encoder_count_y);
+    //    printf("rod %d encoder count: %d\n", r, encoder_count_y);
         
         // linear data, from least to most significant 5-bit chunk
         for (int char_i = 0; char_i < 3; char_i++) {
@@ -187,7 +186,7 @@ void command_msp() {
     if (write(msp_fd, buf, 8) <= 0) {
         perror("error writing bytes to msp");
     }
-//    printf("\n");
+    printf("\n");
 }
 
 // Plan where to move the rods 
@@ -206,22 +205,22 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
     // decide general action state of each rod
     int r;
     for (r = 0; r < NUM_RODS; r++) {
-        if (b->x < rods[r].x - PLAYER_FORWARD_REACH) {
+        if (b->x > rods[r].x - PLAYER_FORWARD_REACH) {
             // ball is ahead of player, too far to kick
             rods[r].rot_state = BLOCK;
-        } else if (b->x > rods[r].x + PLAYER_BACKWARD_REACH) {
+        } else if (b->x < rods[r].x + PLAYER_BACKWARD_REACH) {
             // ball is behind player, too far to kick
             rods[r].rot_state = READY;
-        } else if (b->x <= rods[r].x && b->x >= rods[r].x - PLAYER_FORWARD_REACH) {
+        } else if (b->x >= rods[r].x && b->x <= rods[r].x - PLAYER_FORWARD_REACH) {
             // ball is in front of player, within kicking reach
-            if (b->v_x > MAX_ONCOMING_SHOOT_SPEED) {
+            if (b->v_x < 0 - MAX_ONCOMING_SHOOT_SPEED) {
                 // if ball approaching too fast, just block
                 rods[r].rot_state = BLOCK;
             } else {
                 // otherwise we can shoot
                 rods[r].rot_state = SHOOT;
             }
-        } else if (b->x > rods[r].x && b->x <= rods[r].x + PLAYER_BACKWARD_REACH) {
+        } else if (b->x < rods[r].x && b->x >= rods[r].x + PLAYER_BACKWARD_REACH) {
             // ball is behind player, within kicking reach
             rods[r].rot_state = FANCY_SHOOT;
         } else {
@@ -234,7 +233,7 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
     for (r = 0; r < NUM_RODS; r++) {
         switch (rods[r].rot_state) {
         case BLOCK:
-            if (b->v_x >= MIN_ONCOMING_PLAN_USE_VEL_SPEED) {
+            if (b->v_x <= 0 - MIN_ONCOMING_PLAN_USE_VEL_SPEED) {
                 // if ball is moving towards us, use velocity extrapolation
                 move_player_to_y(&rods[r], rod_intersect_from_vel(b, rods[r].x));
             } else {
@@ -243,7 +242,7 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
             }
             break;
         case READY:
-            if (b->v_x <= -1 * MIN_ONCOMING_PLAN_USE_VEL_SPEED) {
+            if (b->v_x >= MIN_ONCOMING_PLAN_USE_VEL_SPEED) {
                 // if ball is moving towards us, use velocity extrapolation
                 // ball is behind us, so v_x needs to be negative
                 move_player_to_y(&rods[r], rod_intersect_from_vel(b, rods[r].x));
