@@ -107,7 +107,6 @@ void EUSCIA0_IRQHandler(void) {
                 // the only thing we can do here is go to a shutdown state
                 main_state = WAIT;
                 desired_defense_position = 0;
-                P1->OUT |= BIT0;
             } else {
                 desired_defense_position = scratch_defense_position;
             }
@@ -132,7 +131,6 @@ void EUSCIA0_IRQHandler(void) {
                 // the only thing we can do here is go to a shutdown state
                 main_state = WAIT;
                 desired_offense_position = 0;
-                P1->OUT |= BIT0;
             } else {
                 desired_offense_position = scratch_offense_position;
             }

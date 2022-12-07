@@ -16,6 +16,7 @@
 #include "Clock.h"
 #include "CortexM.h"
 #include "Encoder.h"
+#include "StallWatchdog.h"
 
 // commands from Pi
 extern uint16_t desired_defense_position, desired_offense_position;
@@ -90,6 +91,7 @@ int main(void)
     SwitchReader_Init();
     Encoder_Init();
     UART_A0_Init();
+    StallWatchdog_Init();
 
     EnableInterrupts();
 
