@@ -54,6 +54,7 @@ void Stop_LDef();
 void Stop_LOff();
 void Stop_RDef();
 void Stop_ROff();
+void Stop_All_Motors();
 
 
 #endif /* PWM_H_ */

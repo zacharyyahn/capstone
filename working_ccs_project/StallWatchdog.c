@@ -66,6 +66,7 @@ void TA1_0_IRQHandler() {
         uint16_t LDef_Delta = (LDef_Encoder.count - Previous_Encoder_Counts.LDef) > 0 ?
                               (LDef_Encoder.count - Previous_Encoder_Counts.LDef) :
                               (Previous_Encoder_Counts.LDef - LDef_Encoder.count);
+        Previous_Encoder_Counts.LDef = LDef_Encoder.count;
 
         // Check if not moving when should be moving
         if (LDef_Delta <= STATIONARY_TOLERANCE) {
@@ -93,6 +94,7 @@ void TA1_0_IRQHandler() {
         uint16_t LOff_Delta = (LOff_Encoder.count - Previous_Encoder_Counts.LOff) > 0 ?
                               (LOff_Encoder.count - Previous_Encoder_Counts.LOff) :
                               (Previous_Encoder_Counts.LOff - LOff_Encoder.count);
+        Previous_Encoder_Counts.LOff = LOff_Encoder.count;
 
         // Check if not moving when should be moving
         if (LOff_Delta <= STATIONARY_TOLERANCE) {
@@ -120,6 +122,7 @@ void TA1_0_IRQHandler() {
         uint16_t RDef_Delta = (RDef_Encoder.count - Previous_Encoder_Counts.RDef) > 0 ?
                               (RDef_Encoder.count - Previous_Encoder_Counts.RDef) :
                               (Previous_Encoder_Counts.RDef - RDef_Encoder.count);
+        Previous_Encoder_Counts.RDef = RDef_Encoder.count;
 
         // Check if not moving when should be moving
         if (RDef_Delta <= STATIONARY_TOLERANCE) {
@@ -147,6 +150,7 @@ void TA1_0_IRQHandler() {
         uint16_t ROff_Delta = (ROff_Encoder.count - Previous_Encoder_Counts.ROff) > 0 ?
                               (ROff_Encoder.count - Previous_Encoder_Counts.ROff) :
                               (Previous_Encoder_Counts.ROff - ROff_Encoder.count);
+        Previous_Encoder_Counts.ROff = ROff_Encoder.count;
 
         // Check if not moving when should be moving
         if (ROff_Delta <= STATIONARY_TOLERANCE) {

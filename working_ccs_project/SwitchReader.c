@@ -17,6 +17,7 @@ void SwitchReader_Init() {
 }
 
 uint8_t ReadSwitches() {
-    // all switches are active low
-    return (~SWITCH_INPUT_PORT->IN) & ALL_SWITCH_BITS;
+    // all switches are active low but optical are usually active
+    return ((~SWITCH_INPUT_PORT->IN) & (LLSDEF1_BIT | LLSDEF2_BIT | LLSOFF1_BIT | LLSOFF2_BIT)) |
+           (SWITCH_INPUT_PORT->IN & (RLSDEF_BIT | RLSOFF_BIT));
 }
