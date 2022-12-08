@@ -3,7 +3,7 @@
 
 struct rod rods[NUM_RODS];
 int msp_fd;
-__u16 linear_encoder_range;
+int fun_mode = 0;
 
 void init_plan() {
     // common attributes
@@ -17,13 +17,13 @@ void init_plan() {
     }
 
     // unique x positions
-    rods[1].x = DEFENSE_X;
-    rods[0].x = OFFENSE_X;
+    rods[0].x = DEFENSE_X;
+    rods[1].x = OFFENSE_X;
     
     
     // set up serial communication to MSP
     // hopefully this is the right device, might be ACM1 instead
-    printf("waiting for MSP to open...");
+    dprintf(2, "waiting for MSP to open...");
     msp_fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
     while (msp_fd < 0) {
         // spin wait for msp to be ready
@@ -34,7 +34,7 @@ void init_plan() {
             msp_fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
         }
     }
-    printf(" done\n");
+    dprintf(2, " done\n");
 
     struct termios term;
     if (tcgetattr(msp_fd, &term)) {
@@ -62,19 +62,21 @@ void init_plan() {
     }
 
     // calibrate encoders
-    printf("running encoder calibration routine... ");
+    dprintf(2, "running encoder calibration routine...\n");
     char buf = CALIBRATE_CODE;
     if (write(msp_fd, &buf, 1) <= 0) {
         perror("error writing bytes to msp");
     }
-    
-    if (read(msp_fd, &linear_encoder_range, 2) != 2) {
-        perror("error reading bytes from msp");
-        shutdown_plan();
-        exit(1);
+   
+    for (r = 0; r < NUM_RODS; r++) {
+        if (read(msp_fd, &rods[r].encoder_travel, 2) != 2) {
+            perror("error reading bytes from msp");
+            shutdown_plan();
+            exit(1);
+        }
+        dprintf(2, "max encoder count for rod %d: %d\n", r, rods[r].encoder_travel);
     }
-    printf("done\n");
-    printf("max encoder count from msp: %d\n", linear_encoder_range);
+    dprintf(2, "done\n");
 }
 
 void start_msp() {
@@ -140,27 +142,27 @@ void move_player_to_y (struct rod *r, float y) {
 // send the desired state to the MSP
 void command_msp() {
     for (int i = 0; i < NUM_RODS; i++) {
-        printf("rod %d:\tstate: ", i);
+        //printf("rod %d:\tstate: ", i);
         switch (rods[i].rot_state) {
         case BLOCK:
-            printf("BLOCK\t");
+            //printf("BLOCK\t");
             break;
         case READY:
-            printf("READY\t");
+            //printf("READY\t");
             break;
         case SHOOT:
-            printf("SHOOT\t");
+            //printf("SHOOT\t");
             break;
         case FANCY_SHOOT:
-            printf("FANCY\t");
+            //printf("FANCY\t");
             break;
         case SPIN:
-            printf("SPIN \t");
+            //printf("SPIN \t");
             break;
         default:
             break;
         }
-        printf("y: %f\n", rods[i].y);
+        //printf("y: %f\n", rods[i].y);
     }
 
     char buf[8];
@@ -168,7 +170,7 @@ void command_msp() {
     int encoder_count_y;
     for (int r = 0; r < NUM_RODS; r++) {
         // assume msp y axis is opposite of table space y axis
-        encoder_count_y = linear_encoder_range * (1 - rods[r].y / rods[r].travel);
+        encoder_count_y = rods[r].encoder_travel * (1 - rods[r].y / rods[r].travel);
     //    printf("rod %d encoder count: %d\n", r, encoder_count_y);
         
         // linear data, from least to most significant 5-bit chunk
@@ -186,7 +188,7 @@ void command_msp() {
     if (write(msp_fd, buf, 8) <= 0) {
         perror("error writing bytes to msp");
     }
-    printf("\n");
+    //printf("\n");
 }
 
 // Plan where to move the rods 
@@ -205,13 +207,13 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
     // decide general action state of each rod
     int r;
     for (r = 0; r < NUM_RODS; r++) {
-        if (b->x > rods[r].x - PLAYER_FORWARD_REACH) {
+        if (b->x > rods[r].x + PLAYER_FORWARD_REACH) {
             // ball is ahead of player, too far to kick
             rods[r].rot_state = BLOCK;
-        } else if (b->x < rods[r].x + PLAYER_BACKWARD_REACH) {
+        } else if (b->x < rods[r].x - PLAYER_BACKWARD_REACH) {
             // ball is behind player, too far to kick
             rods[r].rot_state = READY;
-        } else if (b->x >= rods[r].x && b->x <= rods[r].x - PLAYER_FORWARD_REACH) {
+        } else if (b->x >= rods[r].x && b->x <= rods[r].x + PLAYER_FORWARD_REACH) {
             // ball is in front of player, within kicking reach
             if (b->v_x < 0 - MAX_ONCOMING_SHOOT_SPEED) {
                 // if ball approaching too fast, just block
@@ -220,7 +222,7 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
                 // otherwise we can shoot
                 rods[r].rot_state = SHOOT;
             }
-        } else if (b->x < rods[r].x && b->x >= rods[r].x + PLAYER_BACKWARD_REACH) {
+        } else if (b->x < rods[r].x && b->x >= rods[r].x - PLAYER_BACKWARD_REACH) {
             // ball is behind player, within kicking reach
             rods[r].rot_state = FANCY_SHOOT;
         } else {
@@ -238,7 +240,8 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
                 move_player_to_y(&rods[r], rod_intersect_from_vel(b, rods[r].x));
             } else {
                 // otherwise, draw line to goal
-                move_player_to_y(&rods[r], rod_intersect_to_goal(b, rods[r].x));
+                // move_player_to_y(&rods[r], rod_intersect_to_goal(b, rods[r].x));
+                move_player_to_y(&rods[r], b->y);
             }
             break;
         case READY:
@@ -262,6 +265,10 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
             printf("ERROR: unknown action state %d of rod %d\n", rods[r].rot_state, r);
             break;
         }
+    }
+
+    for (r = 0; r < NUM_RODS && fun_mode; r++) {
+        rods[r].rot_state = SPIN;
     }
 
     command_msp();

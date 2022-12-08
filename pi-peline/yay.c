@@ -62,6 +62,7 @@ extern int corner_threshold_calibrate;
 
 extern int quit;
 extern int do_output;
+extern int fun_mode;
 // end globals
 
 enum {
@@ -344,6 +345,9 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                 break;
             case SDLK_r:
                 click_mode = SET_RIGHT_CORNER;
+                break;
+            case SDLK_f:
+                fun_mode = 1-fun_mode;
                 break;
 
             case SDLK_0:

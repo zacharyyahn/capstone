@@ -24,7 +24,7 @@
 #define KERNEL_SIZE             20
 #define AVERAGING_BITSHIFT      8
 
-#define CORNER_WIDTH            300
+#define CORNER_WIDTH            220
 #define CORNER_HEIGHT           200
 #define CORNER_LOSS_THRESHOLD   corner_loss_threshold
 
@@ -250,56 +250,6 @@ long loss_function (__u8 *image, __u8 *losses) {
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
-long filter (__u8 *losses, __u8 *filtered) {
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-
-    int li, lj, fi, fj;
-    long sum;
-    for (li = 0; li < HEIGHT-KERNEL_SIZE; li++) {
-        // iterate over full kernel for first pixel of the row
-        sum = 0;
-        for (fi = li; fi < li+KERNEL_SIZE; fi++) {
-            for (fj = 0; fj < KERNEL_SIZE; fj++) {
-                sum += losses[fi*WIDTH + fj];
-            }
-        }
-        filtered[(li+(KERNEL_SIZE>>1))*WIDTH + (KERNEL_SIZE>>1)] = (__u8) (sum >> AVERAGING_BITSHIFT);
-
-        // circular buffer for rest of the row
-        for (lj = 1; lj < WIDTH-KERNEL_SIZE; lj++) {
-            for (fi = li; fi < li+KERNEL_SIZE; fi++) {
-                sum += losses[fi*WIDTH + lj+KERNEL_SIZE] - losses[fi*WIDTH + lj];
-            }
-            filtered[(li+(KERNEL_SIZE>>1))*WIDTH + (lj+(KERNEL_SIZE>>1))] = (__u8) (sum >> AVERAGING_BITSHIFT);
-        }
-    }
-
-    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-    return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
-}
-
-long argmin (__u8 *filtered, struct xy *pos) {
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-
-    int min_i = 0;
-    __u8 min = filtered[0];
-    int i;
-    for (i = 1; i < WIDTH*HEIGHT; i++) {
-        if (filtered[i] < min) {
-            min = filtered[i];
-            min_i = i;
-        }
-    }
-    pos->x = min_i % WIDTH;
-    pos->y = min_i / WIDTH;
-    filtered[min_i] = 0xFF;
-
-    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-    return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
-}
-
 long relative_position (struct xy *bottom_left, struct xy *bottom_right, struct xyf *ball_pos, struct xyf *rel_pos) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
@@ -317,7 +267,7 @@ long relative_position (struct xy *bottom_left, struct xy *bottom_right, struct 
 }
 
 int main () {
-    init_plan();
+    //init_plan();
     init_SDL();
 
     /******************* SET UP IMAGE PROCESSING *******************/
@@ -526,7 +476,7 @@ int main () {
         b.y = rel_pos.y;
         b.v_x = vel.x * 1000000;  // convert velocity to mm/s
         b.v_y = vel.y * 1000000;
-        plan_rod_movement(&b, have_prev_pos);
+        //plan_rod_movement(&b, have_prev_pos);
 
 	if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, exists)) return -1;
         handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
@@ -537,7 +487,7 @@ int main () {
         }
     }  // end main loop
 
-    shutdown_plan();
+    //shutdown_plan();
 
     if (ioctl(v0, VIDIOC_STREAMOFF, &buf_type)) {
         perror("error stopping stream");

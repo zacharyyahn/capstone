@@ -29,7 +29,8 @@ enum rotational_state {
 struct rod {
     // constants
     float x; // fixed x pos
-    float travel;
+    float travel; // in mm
+    __u16 encoder_travel; // in encoder counts
     int num_players; // number of players in the player set
     float player_base[PLAYERS_PER_ROD]; // position of the players at one extreme positioning
                                         // range of player values are player_base[i] to player_base[i] + travel
