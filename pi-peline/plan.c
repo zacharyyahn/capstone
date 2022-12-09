@@ -34,6 +34,7 @@ void init_plan() {
             msp_fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
         }
     }
+    sleep(1);
     dprintf(2, " done\n");
 
     struct termios term;
@@ -82,6 +83,14 @@ void init_plan() {
 void start_msp() {
     printf("starting msp\n");
     char buf = PLAY_CODE;
+    if (write(msp_fd, &buf, 1) <= 0) {
+        perror("error writing bytes to msp");
+    }
+}
+
+void pause_msp() {
+    printf("pausing msp\n");
+    char buf = WAIT_CODE;
     if (write(msp_fd, &buf, 1) <= 0) {
         perror("error writing bytes to msp");
     }
@@ -142,22 +151,22 @@ void move_player_to_y (struct rod *r, float y) {
 // send the desired state to the MSP
 void command_msp() {
     for (int i = 0; i < NUM_RODS; i++) {
-        //printf("rod %d:\tstate: ", i);
+     //   printf("rod %d:\tstate: ", i);
         switch (rods[i].rot_state) {
         case BLOCK:
-            //printf("BLOCK\t");
+       //     printf("BLOCK\t");
             break;
         case READY:
-            //printf("READY\t");
+         //   printf("READY\t");
             break;
         case SHOOT:
-            //printf("SHOOT\t");
+           // printf("SHOOT\t");
             break;
         case FANCY_SHOOT:
-            //printf("FANCY\t");
+           // printf("FANCY\t");
             break;
         case SPIN:
-            //printf("SPIN \t");
+           // printf("SPIN \t");
             break;
         default:
             break;
@@ -188,7 +197,7 @@ void command_msp() {
     if (write(msp_fd, buf, 8) <= 0) {
         perror("error writing bytes to msp");
     }
-    //printf("\n");
+   // printf("\n");
 }
 
 // Plan where to move the rods 

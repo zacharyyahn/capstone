@@ -10,6 +10,7 @@
 #include "table.h"
 #include "yay.h"
 #include "plan.h"
+#include "vision.h"
 
 #define WIDTH                   640
 #define HEIGHT                  480
@@ -18,17 +19,10 @@
 #define BUF_SIZE                WIDTH*HEIGHT*BYTES_PER_PIXEL
 #define EXPOSURE_TIME           20    // in hundreds of microseconds
 
-#define TARGET_Y                target_y
-#define TARGET_U                target_u
-#define TARGET_V                target_v
-#define KERNEL_SIZE             20
-#define AVERAGING_BITSHIFT      8
-
-#define CORNER_WIDTH            220
-#define CORNER_HEIGHT           200
-#define CORNER_LOSS_THRESHOLD   corner_loss_threshold
+#define CORNER_RADIUS           25
 
 #define MAX_INTERPOLATED_FRAMES 3
+
 
 // globals
 __u8 target_y = 255;
@@ -41,6 +35,8 @@ int ball_exists_loss_threshold = 12;
 int ball_exists_expected_pixels = 50;
 int ball_exists_calibrate = 0;
 
+struct xy left_corner_center = {0, 0};
+struct xy right_corner_center = {0, 0};
 __u8 left_corner_y = 255;
 __u8 left_corner_u = 128;
 __u8 left_corner_v = 128;
@@ -53,16 +49,6 @@ int corner_threshold_calibrate = 0;
 int quit = 0;
 int do_output = 1;
 // end globals
-
-struct xy {
-    int x;
-    int y;
-};
-
-struct xyf {
-    float x;
-    float y;
-};
 
 int ball_exists(__u8 *losses, __u8 *exists, struct xy *bottom_left, struct xy *bottom_right) {
     struct xy top_left, top_right;
@@ -150,66 +136,99 @@ long find_corners (__u8 *image, struct xy *bottom_left, struct xy *bottom_right,
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
+    int bottom_left_start_y  = (left_corner_center.y - CORNER_RADIUS) > 0 ?
+                               left_corner_center.y - CORNER_RADIUS : 0;
+    int bottom_left_end_y    = (left_corner_center.y + CORNER_RADIUS) <= HEIGHT ?
+                               left_corner_center.y + CORNER_RADIUS : HEIGHT;
+    int bottom_left_start_x  = (left_corner_center.x - CORNER_RADIUS) > 0 ?
+                               left_corner_center.x - CORNER_RADIUS : 0;
+    int bottom_left_end_x    = (left_corner_center.x + CORNER_RADIUS) <= WIDTH ?
+                               left_corner_center.x + CORNER_RADIUS : WIDTH;
+
+    int bottom_right_start_y = (right_corner_center.y - CORNER_RADIUS) > 0 ?
+                               right_corner_center.y - CORNER_RADIUS : 0;
+    int bottom_right_end_y   = (right_corner_center.y + CORNER_RADIUS) <= HEIGHT ?
+                               right_corner_center.y + CORNER_RADIUS : HEIGHT;
+    int bottom_right_start_x = (right_corner_center.x - CORNER_RADIUS) > 0 ?
+                               right_corner_center.x - CORNER_RADIUS : 0;
+    int bottom_right_end_x   = (right_corner_center.x + CORNER_RADIUS) <= WIDTH ?
+                               right_corner_center.x + CORNER_RADIUS : WIDTH;
+
+    // account for odd / evenness
+    bottom_left_start_y  = (bottom_left_start_y % 2)  == 0 ? bottom_left_start_y  : bottom_left_start_y - 1;
+    bottom_left_start_x  = (bottom_left_start_x % 2)  == 0 ? bottom_left_start_x  : bottom_left_start_x - 1;
+    bottom_right_start_y = (bottom_right_start_y % 2) == 0 ? bottom_right_start_y : bottom_right_start_y - 1;
+    bottom_right_start_x = (bottom_right_start_x % 2) == 0 ? bottom_right_start_x : bottom_right_start_x - 1;
+    
     // track min-loss position in the return structs
-    bottom_left->x = 0;
-    bottom_left->y = HEIGHT-1;
-    bottom_right->x = WIDTH-1;
-    bottom_right->y = HEIGHT-1;
+    bottom_left->x = bottom_left_end_x - 1;
+    bottom_left->y = bottom_left_start_y;
+    bottom_right->x = bottom_right_start_x;
+    bottom_right->y = bottom_right_start_y;
+
 
     // bottom-left corner
     int i, j, pix0, pix1, C_loss;
-    for (i = HEIGHT-1; i >= HEIGHT - CORNER_HEIGHT; i--) {
-        for (j = 0; j < CORNER_WIDTH; j += 2) {
+    for (i = bottom_left_start_y; i < bottom_left_end_y; i++) {
+        for (j = bottom_left_start_x; j < bottom_left_end_x; j += 2) {
             pix0 = (i*WIDTH + j) << 1;
             pix1 = pix0 + 2;
+            if (pix0 >= WIDTH*HEIGHT*BYTES_PER_PIXEL || pix1 >= WIDTH*HEIGHT*BYTES_PER_PIXEL || pix0 < 0 || pix1 < 0) {
+                printf("HEY! bad pixel index %d or %d\n", pix0, pix1);
+            }
 
             C_loss = (left_corner_u > image[pix0+1] ? left_corner_u - image[pix0+1] : image[pix0+1] - left_corner_u) +
                      (left_corner_v > image[pix0+3] ? left_corner_v - image[pix0+3] : image[pix0+3] - left_corner_v);
 
-            // check rightmost pixel first
-            if (     (left_corner_y > image[pix1]   ? left_corner_y - image[pix1]   : image[pix1]   - left_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if ((j + 1) - i > bottom_left->x - bottom_left->y) {
-                    bottom_left->x = j + 1;
-                    bottom_left->y = i;
-                }
-                if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
-            }
-            // only check leftmost pixel if rightmost isn't a match
-            else if ((left_corner_y > image[pix0]   ? left_corner_y - image[pix0]   : image[pix0]   - left_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if (j - i > bottom_left->x - bottom_left->y) {
+            // check leftmost pixel first
+            if ((left_corner_y > image[pix0]   ? left_corner_y - image[pix0]   : image[pix0]   - left_corner_y) + C_loss < corner_loss_threshold) {
+                if (i - j > bottom_left->y - bottom_left->x) {
                     bottom_left->x = j;
                     bottom_left->y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
             }
+            // only check rightmost pixel if leftmost isn't a match
+            else if ((left_corner_y > image[pix1]   ? left_corner_y - image[pix1]   : image[pix1]   - left_corner_y) + C_loss < corner_loss_threshold) {
+                if (i - (j + 1) > bottom_left->y - bottom_left->x) {
+                    bottom_left->x = j + 1;
+                    bottom_left->y = i;
+                }
+                if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
+            }
+            
         }
     }
 
     //bottom-right corner
-    for (i = HEIGHT-1; i >= HEIGHT - CORNER_HEIGHT; i--) {
-        for (j = WIDTH - CORNER_WIDTH; j < WIDTH; j += 2) {
+    for (i = bottom_right_start_y; i < bottom_right_end_y; i++) {
+        for (j = bottom_right_start_x; j < bottom_right_end_x; j += 2) {
             pix0 = (i*WIDTH + j) << 1;
             pix1 = pix0 + 2;
-
+            if (pix0 >= WIDTH*HEIGHT*BYTES_PER_PIXEL || pix1 >= WIDTH*HEIGHT*BYTES_PER_PIXEL || pix0 < 0 || pix1 < 0) {
+                printf("HEY! bad pixel index %d or %d\n", pix0, pix1);
+            }
+            
             C_loss = (right_corner_u > image[pix0+1] ? right_corner_u - image[pix0+1] : image[pix0+1] - right_corner_u) +
                      (right_corner_v > image[pix0+3] ? right_corner_v - image[pix0+3] : image[pix0+3] - right_corner_v);
 
-            // check leftmost pixel first
-            if (     (right_corner_y > image[pix0]   ? right_corner_y - image[pix0]   : image[pix0]   - right_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if (-1*i - j > -1*bottom_right->y - bottom_right->x) {
-                    bottom_right->x = j;
-                    bottom_right->y = i;
-                }
-                if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
-            }
-            // only check rightmost pixel if leftmost isn't a match
-            else if ((right_corner_y > image[pix1]   ? right_corner_y - image[pix1]   : image[pix1]   - right_corner_y) + C_loss < CORNER_LOSS_THRESHOLD) {
-                if (-1*i - (j + 1) > -1*bottom_right->y - bottom_right->x) {
+            // check rightmost pixel first
+            if ((right_corner_y > image[pix1]   ? right_corner_y - image[pix1]   : image[pix1]   - right_corner_y) + C_loss < corner_loss_threshold) {
+                if (i + (j + 1) > bottom_right->y + bottom_right->x) {
                     bottom_right->x = j + 1;
                     bottom_right->y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
             }
+            // only check leftmost pixel if rightmost isn't a match
+            else if ((right_corner_y > image[pix0]   ? right_corner_y - image[pix0]   : image[pix0]   - right_corner_y) + C_loss < corner_loss_threshold) {
+                if (i + j > bottom_right->y + bottom_right->x) {
+                    bottom_right->x = j;
+                    bottom_right->y = i;
+                }
+                if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
+            }
+            
         }
     }
 
@@ -225,10 +244,10 @@ long loss_function (__u8 *image, __u8 *losses) {
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
     int i, C_loss;
     for (i = 0; i < BUF_SIZE; i += 4) {
-        C_loss = (TARGET_U > image[i+1] ? TARGET_U - image[i+1] : image[i+1] - TARGET_U) +
-                 (TARGET_V > image[i+3] ? TARGET_V - image[i+3] : image[i+3] - TARGET_V);
-        losses[i >> 1]       = ((TARGET_Y > image[i]   ? TARGET_Y - image[i]   : image[i]   - TARGET_Y) + C_loss) >> 2;
-        losses[(i >> 1) + 1] = ((TARGET_Y > image[i+2] ? TARGET_Y - image[i+2] : image[i+2] - TARGET_Y) + C_loss) >> 2;
+        C_loss = (target_u > image[i+1] ? target_u - image[i+1] : image[i+1] - target_u) +
+                 (target_v > image[i+3] ? target_v - image[i+3] : image[i+3] - target_v);
+        losses[i >> 1]       = ((target_y > image[i]   ? target_y - image[i]   : image[i]   - target_y) + C_loss) >> 2;
+        losses[(i >> 1) + 1] = ((target_y > image[i+2] ? target_y - image[i+2] : image[i+2] - target_y) + C_loss) >> 2;
 
         if (loss_contrast_booster) {
             if (losses[i >> 1] >= (256 >> loss_contrast_booster)) {
@@ -266,9 +285,46 @@ long relative_position (struct xy *bottom_left, struct xy *bottom_right, struct 
     return (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
 }
 
+void read_settings() {
+    FILE *settings = fopen("colors.txt", "r");
+    if (!settings) {
+        perror("error reading settings file");
+        exit(1);
+    }
+    fscanf(settings, "target_y: %hhd\ntarget_u: %hhd\ntarget_v: %hhd\nleft_corner_center: (%d, %d)\n"
+                     "right_corner_center: (%d, %d)\nleft_corner_y: %hhd\nleft_corner_u: %hhd\n"
+                     "left_corner_v: %hhd\nright_corner_y: %hhd\nright_corner_u: %hhd\nright_corner_v: %hhd\n",
+           &target_y, &target_u, &target_v, &left_corner_center.x, &left_corner_center.y, &right_corner_center.x,
+           &right_corner_center.y, &left_corner_y, &left_corner_u, &left_corner_v, &right_corner_y,
+           &right_corner_u, &right_corner_v);
+    if (fclose(settings)) {
+        perror("error closing settings file");
+        exit(1);
+    }
+}
+
+void write_settings() {
+    int settings_fd = open("colors.txt", O_WRONLY | O_TRUNC | O_CREAT, 00644);
+    if (settings_fd < 0) {
+        perror("error writing settings to file");
+        exit(1);
+    }
+    dprintf(settings_fd, "target_y: %d\ntarget_u: %d\ntarget_v: %d\nleft_corner_center: (%d, %d)\n"
+                          "right_corner_center: (%d, %d)\nleft_corner_y: %d\nleft_corner_u: %d\n"
+                          "left_corner_v: %d\nright_corner_y: %d\nright_corner_u: %d\nright_corner_v: %d\n",
+            target_y, target_u, target_v, left_corner_center.x, left_corner_center.y, right_corner_center.x,
+            right_corner_center.y, left_corner_y, left_corner_u, left_corner_v, right_corner_y,
+            right_corner_u, right_corner_v);
+    if (close(settings_fd)) {
+        perror("error closing settings file");
+        exit(1);
+    }
+}
+
 int main () {
     //init_plan();
     init_SDL();
+    read_settings();
 
     /******************* SET UP IMAGE PROCESSING *******************/
     __u8 losses[WIDTH*HEIGHT];
@@ -498,6 +554,7 @@ int main () {
     }
 
     cleanup_SDL();
+    write_settings();
 
     return 0;
 }

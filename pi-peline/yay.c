@@ -30,6 +30,7 @@
 
 #include "yay.h"
 #include "plan.h"
+#include "vision.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -51,6 +52,8 @@ extern int loss_contrast_booster;
 extern int ball_exists_loss_threshold;
 extern int ball_exists_calibrate;
 
+extern struct xy left_corner_center;
+extern struct xy right_corner_center;
 extern __u8 left_corner_y;
 extern __u8 left_corner_u;
 extern __u8 left_corner_v;
@@ -301,13 +304,19 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                     left_corner_y = buf[pixel_i << 1];
                     left_corner_u = buf[(color_i << 1) + 1];
                     left_corner_v = buf[(color_i << 1) + 3];
-                    printf("setting left corner YUV to %d, %d, %d\n", left_corner_y, left_corner_u, left_corner_v);
+                    left_corner_center.x = event.button.x;
+                    left_corner_center.y = event.button.y;
+                    printf("setting left corner YUV to %d, %d, %d and center to (%d, %d)\n",
+                            left_corner_y, left_corner_u, left_corner_v, left_corner_center.x, left_corner_center.y);
                     break;
                 case SET_RIGHT_CORNER:
                     right_corner_y = buf[pixel_i << 1];
                     right_corner_u = buf[(color_i << 1) + 1];
                     right_corner_v = buf[(color_i << 1) + 3];
-                    printf("setting right corner YUV to %d, %d, %d\n", right_corner_y, right_corner_u, right_corner_v);
+                    right_corner_center.x = event.button.x;
+                    right_corner_center.y = event.button.y;
+                    printf("setting right corner YUV to %d, %d, %d and center to (%d, %d)\n",
+                            right_corner_y, right_corner_u, right_corner_v, right_corner_center.x, right_corner_center.y);
                     break;
                 default:
                     break;
@@ -334,8 +343,11 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
             case SDLK_RETURN:
                 start_msp();
                 break;
+            case SDLK_w:
+                pause_msp();
+                break;
             case SDLK_SPACE:
-                do_output = 1 - do_output;
+                do_output = !do_output;
                 break;
             case SDLK_b:
                 click_mode = SET_BALL;
@@ -347,7 +359,7 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                 click_mode = SET_RIGHT_CORNER;
                 break;
             case SDLK_f:
-                fun_mode = 1-fun_mode;
+                fun_mode = !fun_mode;
                 break;
 
             case SDLK_0:
@@ -370,11 +382,11 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
                 break;
 
             case SDLK_t:
-                corner_threshold_calibrate = 1 - corner_threshold_calibrate;
+                corner_threshold_calibrate = !corner_threshold_calibrate;
                 ball_exists_calibrate = 0;
                 break;
             case SDLK_e:
-                ball_exists_calibrate = 1 - ball_exists_calibrate;
+                ball_exists_calibrate = !ball_exists_calibrate;
                 corner_threshold_calibrate = 0;
                 loss_contrast_booster = 0;
                 break;

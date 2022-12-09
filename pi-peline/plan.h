@@ -57,6 +57,8 @@ void init_plan();
 
 void start_msp();
 
+void pause_msp();
+
 void return_to_default();
 
 void command_msp();
