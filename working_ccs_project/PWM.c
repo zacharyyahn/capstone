@@ -112,6 +112,13 @@ void Stop_ROff () {
     ROTATIONAL_CONTROL_PORT->OUT &= ~(ROFF_IN1_BIT | ROFF_IN2_BIT);
 }
 
+void Stop_All_Motors () {
+    Stop_LOff();
+    Stop_ROff();
+    Stop_LDef();
+    Stop_RDef();
+}
+
 // Setter for direction flag for rotational defense motor
 void SetDir_RDef (enum direction dir) {
     switch (dir) {

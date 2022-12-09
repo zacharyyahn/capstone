@@ -12,19 +12,21 @@
 // scratch values are used while positions are being built across multiple bytes
 uint16_t scratch_offense_position, scratch_defense_position;
 uint16_t desired_offense_position, desired_defense_position;
-char tx_buffer[2];
+char tx_buffer[4];
 uint8_t bytes_to_send = 0;
 
 enum rotational_state offense_rotstate, defense_rotstate;
 enum main_state_enum main_state;
 
 // maximum linear encoder count for bounds checking
-extern uint16_t linear_encoder_range;
+extern uint16_t ldef_encoder_range, loff_encoder_range;
 
 void UART_ToPi (char *toSend) {
     tx_buffer[0] = toSend[0];
     tx_buffer[1] = toSend[1];
-    bytes_to_send = 2;
+    tx_buffer[2] = toSend[2];
+    tx_buffer[3] = toSend[3];
+    bytes_to_send = 4;
     EUSCI_A0->IFG |= EUSCI_A_IFG_TXIFG;
 }
 
@@ -102,12 +104,11 @@ void EUSCIA0_IRQHandler(void) {
         case 2:
             // most significant 5-bit word of defense position
             scratch_defense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
-            if (scratch_defense_position > linear_encoder_range) {
+            if (scratch_defense_position > ldef_encoder_range) {
                 // the desired position is out of bounds, which should be impossible
                 // the only thing we can do here is go to a shutdown state
                 main_state = WAIT;
                 desired_defense_position = 0;
-                P1->OUT |= BIT0;
             } else {
                 desired_defense_position = scratch_defense_position;
             }
@@ -127,12 +128,11 @@ void EUSCIA0_IRQHandler(void) {
         case 6:
             // most significant 5-bit word of offense position
             scratch_offense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
-            if (scratch_offense_position > linear_encoder_range) {
+            if (scratch_offense_position > ldef_encoder_range) {
                 // the desired position is out of bounds, which should be impossible
                 // the only thing we can do here is go to a shutdown state
                 main_state = WAIT;
                 desired_offense_position = 0;
-                P1->OUT |= BIT0;
             } else {
                 desired_offense_position = scratch_offense_position;
             }
@@ -166,7 +166,7 @@ void EUSCIA0_IRQHandler(void) {
     if (EUSCI_A0->IFG & EUSCI_A_IFG_TXIFG) {
         // Handle Tx
         if (bytes_to_send) {
-            EUSCI_A0->TXBUF = tx_buffer[2 - bytes_to_send];
+            EUSCI_A0->TXBUF = tx_buffer[4 - bytes_to_send];
             bytes_to_send--;
         }
         EUSCI_A0->IFG &= ~EUSCI_A_IFG_TXIFG;
