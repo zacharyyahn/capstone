@@ -13,8 +13,8 @@
 #define PLAYER_SPACING          82.0
 #define PLAYER_EDGE_MARGIN      21.5
 
-#define PLAYER_FORWARD_REACH    30.0
-#define PLAYER_BACKWARD_REACH   10.0
+#define PLAYER_FORWARD_REACH    60.0
+#define PLAYER_BACKWARD_REACH   20.0
 #define PLAYER_FOOT_RADIUS      6.5
 #define BALL_RADIUS             13.5
 
