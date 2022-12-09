@@ -18,11 +18,14 @@
 #include "Encoder.h"
 #include "StallWatchdog.h"
 
-// Defines
-#define MIN_LINEAR_SPEED 3000
-#define MAX_LINEAR_SPEED 6000
-#define MIN_ROTATIONAL_SPEED 3000
-#define MAX_ROTATIONAL_SPEED 6000
+// Motor control tuning macros
+#define MIN_LINEAR_SPEED                3000        // Linear min duty (0 - 11998)
+#define MAX_LINEAR_SPEED                6000        // Linear max duty (0 - 11998)
+#define MIN_ROTATIONAL_SPEED            3000        // Rotational min duty (0 - 11998)
+#define MAX_ROTATIONAL_SPEED            6000        // Rotational max duty (0 - 11998)
+#define LINEAR_CONTROL_TOLERANCE        5           // Linear motor acceptable desired vs actual encoder delta
+#define ROTATIONAL_CONTROL_TOLERANCE    10          // Rotational motor acceptable desired vs actual encoder delta
+#define MAX_SPEED_ERROR_THRESHOLD       200         // Linear motor encoder delta above which motor will run at MAX
 
 
 // Commands from Pi
@@ -84,10 +87,15 @@ int main(void)
 
     // Outer superloop, checks overall MSP state
     while (1) {
+
+        /***************************** WAIT ******************************/
+
         // Wait for start signal from Pi
         while (main_state == WAIT) {
             Stop_All_Motors();
         }
+
+        /*************************** CALIBRATE ***************************/
 
         // Calibration Routine
         // Break if not main state transition from WAIT to CALIBRATE
@@ -98,7 +106,6 @@ int main(void)
         int unsent_linear_encoder_ranges = 0;
 
         while (main_state == CALIBRATE) {
-
             // LDEF calibration
             switch (ldef_calibrate_state) {
             case FIND_MIN:
@@ -287,6 +294,8 @@ int main(void)
             }
         }
 
+        /*************************** GAMEPLAY ***************************/
+
         // Play the game, flip the bits ;P
         while (main_state == PLAY) {
             // Calibrate encoder counts from limit switches
@@ -418,26 +427,46 @@ int main(void)
 } // Main function
 
 
+/*************************** CONTROL ***************************/
+
 unsigned int LinearControl (int error) {
     unsigned int abs_error = error >= 0 ? error : 0-error;
-    if (abs_error < 5) {
+    if (abs_error < LINEAR_CONTROL_TOLERANCE) {
         return 0;
-    } else if (abs_error >= 200) {
+    } else if (abs_error >= MAX_SPEED_ERROR_THRESHOLD) {
         return MAX_LINEAR_SPEED;
     } else {
-        // min speed 2000 at 5 error, max speed 6000 at 200 error
-        return MIN_LINEAR_SPEED + (abs_error - 5 ) * (MAX_LINEAR_SPEED - MIN_LINEAR_SPEED) / 195;
+        // MIN_LINEAR_SPEED at LINEAR_CONTROL_TOLERANCE error, approx MAX_LINEAR_SPEED at MAX_SPEED_ERROR_THRESHOLD error
+        return MIN_LINEAR_SPEED + (abs_error - LINEAR_CONTROL_TOLERANCE) *
+                                  (MAX_LINEAR_SPEED - MIN_LINEAR_SPEED) / (MAX_SPEED_ERROR_THRESHOLD - LINEAR_CONTROL_TOLERANCE);
     }
 }
 
 unsigned int RotationalControl (int error) {
     unsigned int abs_error = error >= 0 ? error : 0-error;
-    if (abs_error < 10) {
+    if (abs_error < ROTATIONAL_CONTROL_TOLERANCE) {
         return 0;
     } else {
         return MAX_ROTATIONAL_SPEED;
     }
 }
+
+/*************************** HELPER ***************************/
+
+void CalibrateEncoders(uint8_t switch_image) {
+    // Optical interrupters are actually high at 90deg forward; correct for use elsewhere
+    if (switch_image & RLSDEF_BIT)  RDef_Encoder.count = rdef_encoder_360_deg >> 2;
+    if (switch_image & RLSOFF_BIT)  ROff_Encoder.count = roff_encoder_360_deg >> 2;
+
+    // Linear limit switches at 0 and max range
+    if (switch_image & LLSDEF1_BIT) LDef_Encoder.count = 0;
+    if (switch_image & LLSDEF2_BIT) LDef_Encoder.count = ldef_encoder_range;
+    if (switch_image & LLSOFF1_BIT) LOff_Encoder.count = 0;
+    if (switch_image & LLSOFF2_BIT) LOff_Encoder.count = loff_encoder_range;
+}
+
+
+/**************************** SETUP ****************************/
 
 void SetInitialStates() {
     // Initialize and default to WIND_UP state
@@ -467,14 +496,4 @@ void ConfigureDebugGPIO() {
     P1->OUT &= ~BIT0;
 }
 
-void CalibrateEncoders(uint8_t switch_image) {
-    // Optical interrupters are actually high at 90deg forward; correct for use elsewhere
-    if (switch_image & RLSDEF_BIT)  RDef_Encoder.count = rdef_encoder_360_deg >> 2;
-    if (switch_image & RLSOFF_BIT)  ROff_Encoder.count = roff_encoder_360_deg >> 2;
 
-    // Linear limit switches at 0 and max range
-    if (switch_image & LLSDEF1_BIT) LDef_Encoder.count = 0;
-    if (switch_image & LLSDEF2_BIT) LDef_Encoder.count = ldef_encoder_range;
-    if (switch_image & LLSOFF1_BIT) LOff_Encoder.count = 0;
-    if (switch_image & LLSOFF2_BIT) LOff_Encoder.count = loff_encoder_range;
-}
