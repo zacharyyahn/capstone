@@ -168,13 +168,14 @@ void SetDir_LDef (enum direction dir) {
 }
 
 // Setter for direction flag for linear offense motor
+// NOTE: motor flipped mechanically from original orientation
 void SetDir_LOff (enum direction dir) {
     switch (dir) {
-    case FORWARD:
+    case REVERSE:
         LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN2_BIT;
         LOff_PWM_Pin = LOFF_IN1_BIT;
 		break;
-    case REVERSE:
+    case FORWARD:
         LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN1_BIT;
         LOff_PWM_Pin = LOFF_IN2_BIT;
 		break;

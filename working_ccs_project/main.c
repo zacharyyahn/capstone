@@ -93,19 +93,18 @@ int main(void)
         // Wait for start signal from Pi
         while (main_state == WAIT) {
             Stop_All_Motors();
+            SetInitialState();
         }
 
         /*************************** CALIBRATE ***************************/
 
         // Calibration Routine
-        // Break if not main state transition from WAIT to CALIBRATE
-        if (main_state != CALIBRATE) break;
-
         // Linear motor max encoder count information to send to pi
         char out_buffer[4];
         int unsent_linear_encoder_ranges = 0;
 
         while (main_state == CALIBRATE) {
+
             // LDEF calibration
             switch (ldef_calibrate_state) {
             case FIND_MIN:
@@ -120,7 +119,7 @@ int main(void)
                 }
                 break;
             case FIND_MAX:
-                // Go forward until switch at max position is it; set count to send to pi and transition to GOTO_DEFAULT
+                // Go forward until switch at max position is hit; set count to send to pi and transition to GOTO_DEFAULT
                 if (!(ReadSwitches() & LLSDEF2_BIT)) {
                     SetDir_LDef(FORWARD);
                     SetDuty_LDef(MIN_LINEAR_SPEED);
@@ -197,7 +196,6 @@ int main(void)
                     SetDir_RDef(FORWARD);
                     SetDuty_RDef(MIN_ROTATIONAL_SPEED);
                 } else {
-                    Stop_RDef();
                     RDef_Encoder.count = 0;
                     rdef_calibrate_state = EXIT_NOTCH;
                 }
@@ -208,7 +206,6 @@ int main(void)
                     SetDir_RDef(FORWARD);
                     SetDuty_RDef(MIN_ROTATIONAL_SPEED);
                 } else {
-                    Stop_RDef();
                     rdef_calibrate_state = FIND_MAX;
                 }
                 break;
@@ -219,7 +216,6 @@ int main(void)
                     SetDir_RDef(FORWARD);
                     SetDuty_RDef(MIN_ROTATIONAL_SPEED);
                 } else {
-                    Stop_RDef();
                     rdef_encoder_360_deg = RDef_Encoder.count;
                     RDef_Encoder.count = rdef_encoder_360_deg >> 2;
                     rdef_calibrate_state = GOTO_DEFAULT;
@@ -246,7 +242,6 @@ int main(void)
                     SetDir_ROff(FORWARD);
                     SetDuty_ROff(MIN_ROTATIONAL_SPEED);
                 } else {
-                    Stop_ROff();
                     ROff_Encoder.count = 0;
                     roff_calibrate_state = EXIT_NOTCH;
                 }
@@ -257,7 +252,6 @@ int main(void)
                     SetDir_ROff(FORWARD);
                     SetDuty_ROff(MIN_ROTATIONAL_SPEED);
                 } else {
-                    Stop_ROff();
                     roff_calibrate_state = FIND_MAX;
                 }
                 break;
@@ -268,7 +262,6 @@ int main(void)
                     SetDir_ROff(FORWARD);
                     SetDuty_ROff(MIN_ROTATIONAL_SPEED);
                 } else {
-                    Stop_ROff();
                     // Normalize encoder count to zero at vertical
                     roff_encoder_360_deg = ROff_Encoder.count;
                     ROff_Encoder.count = roff_encoder_360_deg >> 2;
@@ -325,6 +318,7 @@ int main(void)
                 SetDuty_ROff(RotationalControl(ROff_Encoder.count - (roff_encoder_360_deg >> 2)));
                 offense_shoot_state = WIND_UP;
                 break;
+            case FANCY_SHOOT:
             case SHOOT:
                 // Switch on shoot state
                 switch (offense_shoot_state) {
@@ -348,10 +342,7 @@ int main(void)
                     break;
                 }
                 break;
-            case FANCY_SHOOT:
-                // Not currently implemented; stop motor (play will continue)
-                Stop_ROff();
-                break;
+
             case SPIN:
                 // SPIN
                 SetDuty_ROff(MAX_ROTATIONAL_SPEED);
@@ -380,6 +371,7 @@ int main(void)
                 SetDuty_RDef(RotationalControl(RDef_Encoder.count - (rdef_encoder_360_deg >> 2)));
                 defense_shoot_state = WIND_UP;
                 break;
+            case FANCY_SHOOT:
             case SHOOT:
                 // Switch on shoot state
                 switch (defense_shoot_state) {
@@ -402,10 +394,6 @@ int main(void)
                     }
                     break;
                 }
-                break;
-            case FANCY_SHOOT:
-                // Not currently implemented; stop motor (play will continue)
-                Stop_RDef();
                 break;
             case SPIN:
                 // SPIN

@@ -275,10 +275,10 @@ void LOFF_IRQ() {
     case STATE_11:
         switch (LOff_Encoder.state) {
         case STATE_10:
-            LOff_Encoder.count--;
+            LOff_Encoder.count++;
             break;
         case STATE_01:
-            LOff_Encoder.count++;
+            LOff_Encoder.count--;
             break;
         default:
             // unreachable unless we miss an encoder edge
@@ -288,10 +288,10 @@ void LOFF_IRQ() {
     case STATE_10:
         switch (LOff_Encoder.state) {
         case STATE_00:
-            LOff_Encoder.count--;
+            LOff_Encoder.count++;
             break;
         case STATE_11:
-            LOff_Encoder.count++;
+            LOff_Encoder.count--;
             break;
         default:
             // unreachable unless we miss an encoder edge
@@ -301,10 +301,10 @@ void LOFF_IRQ() {
     case STATE_01:
         switch (LOff_Encoder.state) {
         case STATE_11:
-            LOff_Encoder.count--;
+            LOff_Encoder.count++;
             break;
         case STATE_00:
-            LOff_Encoder.count++;
+            LOff_Encoder.count--;
             break;
         default:
             // unreachable unless we miss an encoder edge
@@ -314,10 +314,10 @@ void LOFF_IRQ() {
     case STATE_00:
         switch (LOff_Encoder.state) {
         case STATE_01:
-            LOff_Encoder.count--;
+            LOff_Encoder.count++;
             break;
         case STATE_10:
-            LOff_Encoder.count++;
+            LOff_Encoder.count--;
             break;
         default:
             // unreachable unless we miss an encoder edge

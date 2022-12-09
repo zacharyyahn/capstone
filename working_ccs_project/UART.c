@@ -128,7 +128,7 @@ void EUSCIA0_IRQHandler(void) {
         case 6:
             // most significant 5-bit word of offense position
             scratch_offense_position += ((uint32_t) (c & UART_DATA_BITMASK)) << 10;
-            if (scratch_offense_position > ldef_encoder_range) {
+            if (scratch_offense_position > loff_encoder_range) {
                 // the desired position is out of bounds, which should be impossible
                 // the only thing we can do here is go to a shutdown state
                 main_state = WAIT;
