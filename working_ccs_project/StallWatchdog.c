@@ -21,6 +21,8 @@ struct motor_counts {
 };
 
 struct motor_counts Previous_Encoder_Counts, Stall_Counts;
+enum stall_state_enum stall_state;
+int16_t stall_position;
 
 void StallWatchdog_Init() {
 
@@ -56,12 +58,19 @@ void StallWatchdog_Init() {
     Stall_Counts.LOff = 0;
     Stall_Counts.RDef = 0;
     Stall_Counts.ROff = 0;
+
+    // Assume no motors stalled in initial state
+    stall_state = NONE_STALLED;
 }
 
-void TA1_0_IRQHandler() {
-    if (TIMER_A0->CCR[LDEF_CCR_INDEX]) {
-        // LDEF duty cycle is positive
+// In wdog if a stallcount hits 10 check stallstate
+// if stallstate is none set to motor stalled and reset count, mainstate to recovery
+// if stallstae not none and not same motor, shutdown and goto wait
+// if same motor appears stalled, we failed recovery and should goto wait
+// reset to none in individual "not stalled" cases
 
+void TA1_0_IRQHandler() {
+    if (TIMER_A0->CCR[LDEF_CCR_INDEX]) {            // LDEF duty cycle is positive
         // Abs of actual and previous encoder counts
         uint16_t LDef_Delta = (LDef_Encoder.count - Previous_Encoder_Counts.LDef) > 0 ?
                               (LDef_Encoder.count - Previous_Encoder_Counts.LDef) :
@@ -73,23 +82,32 @@ void TA1_0_IRQHandler() {
             Stall_Counts.LDef++;
         } else {
             Stall_Counts.LDef = 0;
+            if (stall_state == LDEF_STALLED) {
+                stall_state = NONE_STALLED;
+                P1->OUT &= ~BIT0;
+            }
         }
 
         // Each stall count is 1/50s
         if (Stall_Counts.LDef >= 10) {
             // Stop all motors
-            Stop_LOff();
-            Stop_ROff();
-            Stop_LDef();
-            Stop_RDef();
-            main_state = WAIT;
+            Stop_All_Motors();
+            if (stall_state == NONE_STALLED) {
+                stall_state = LDEF_STALLED;
+                main_state = STALL_RECOVERY;
+                Stall_Counts.LDef = 0;
+            } else {
+                main_state = WAIT;
+                Stall_Counts.LDef = 0;
+                stall_state = MULTIPLE_STALLED;
+            }
 
             // Red LED on for debug
             P1->OUT |= BIT0;
         }
     }
 
-    if (TIMER_A0->CCR[LOFF_CCR_INDEX]) {
+    if (TIMER_A0->CCR[LOFF_CCR_INDEX]) {            // LOFF duty cycle positive
         // Abs of actual and previous encoder counts
         uint16_t LOff_Delta = (LOff_Encoder.count - Previous_Encoder_Counts.LOff) > 0 ?
                               (LOff_Encoder.count - Previous_Encoder_Counts.LOff) :
@@ -101,16 +119,25 @@ void TA1_0_IRQHandler() {
             Stall_Counts.LOff++;
         } else {
             Stall_Counts.LOff = 0;
+            if (stall_state == LOFF_STALLED) {
+                stall_state = NONE_STALLED;
+                P1->OUT &= ~BIT0;
+            }
         }
 
         // Each stall count is 1/50s
         if (Stall_Counts.LOff >= 10) {
             // Stop all motors
-            Stop_LOff();
-            Stop_ROff();
-            Stop_LDef();
-            Stop_RDef();
-            main_state = WAIT;
+            Stop_All_Motors();
+            if (stall_state == NONE_STALLED) {
+                stall_state = LOFF_STALLED;
+                main_state = STALL_RECOVERY;
+                Stall_Counts.LOff = 0;
+            } else {
+                main_state = WAIT;
+                Stall_Counts.LOff = 0;
+                stall_state = MULTIPLE_STALLED;
+            }
 
             // Red LED on for debug
             P1->OUT |= BIT0;
@@ -129,16 +156,26 @@ void TA1_0_IRQHandler() {
             Stall_Counts.RDef++;
         } else {
             Stall_Counts.RDef = 0;
+            if (stall_state == RDEF_STALLED) {
+                stall_state = NONE_STALLED;
+                P1->OUT &= ~BIT0;
+            }
         }
 
         // Each stall count is 1/50s
         if (Stall_Counts.RDef >= 10) {
             // Stop all motors
-            Stop_LOff();
-            Stop_ROff();
-            Stop_LDef();
-            Stop_RDef();
-            main_state = WAIT;
+            Stop_All_Motors();
+            if (stall_state == NONE_STALLED) {
+                stall_state = RDEF_STALLED;
+                stall_position = LDef_Encoder.count;
+                main_state = STALL_RECOVERY;
+                Stall_Counts.RDef = 0;
+            } else {
+                main_state = WAIT;
+                Stall_Counts.RDef = 0;
+                stall_state = MULTIPLE_STALLED;
+            }
 
             // Red LED on for debug
             P1->OUT |= BIT0;
@@ -157,16 +194,26 @@ void TA1_0_IRQHandler() {
             Stall_Counts.ROff++;
         } else {
             Stall_Counts.ROff = 0;
+            if (stall_state == ROFF_STALLED) {
+                stall_state = NONE_STALLED;
+                P1->OUT &= ~BIT0;
+            }
         }
 
         // Each stall count is 1/50s
         if (Stall_Counts.ROff >= 10) {
             // Stop all motors
-            Stop_LOff();
-            Stop_ROff();
-            Stop_LDef();
-            Stop_RDef();
-            main_state = WAIT;
+            Stop_All_Motors();
+            if (stall_state == NONE_STALLED) {
+                stall_state = ROFF_STALLED;
+                stall_position = LOff_Encoder.count;
+                main_state = STALL_RECOVERY;
+                Stall_Counts.ROff = 0;
+            } else {
+                main_state = WAIT;
+                Stall_Counts.ROff = 0;
+                stall_state = MULTIPLE_STALLED;
+            }
 
             // Red LED on for debug
             P1->OUT |= BIT0;

@@ -27,6 +27,7 @@ enum main_state_enum {
     WAIT,
     CALIBRATE,
     PLAY,
+    STALL_RECOVERY,
 };
 
 /*

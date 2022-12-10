@@ -20,9 +20,9 @@
 
 // Motor control tuning macros
 #define MIN_LINEAR_SPEED                3000        // Linear min duty (0 - 11998)
-#define MAX_LINEAR_SPEED                6000        // Linear max duty (0 - 11998)
+#define MAX_LINEAR_SPEED                10000        // Linear max duty (0 - 11998)
 #define MIN_ROTATIONAL_SPEED            3000        // Rotational min duty (0 - 11998)
-#define MAX_ROTATIONAL_SPEED            6000        // Rotational max duty (0 - 11998)
+#define MAX_ROTATIONAL_SPEED            10000        // Rotational max duty (0 - 11998)
 #define LINEAR_CONTROL_TOLERANCE        5           // Linear motor acceptable desired vs actual encoder delta
 #define ROTATIONAL_CONTROL_TOLERANCE    10          // Rotational motor acceptable desired vs actual encoder delta
 #define MAX_SPEED_ERROR_THRESHOLD       200         // Linear motor encoder delta above which motor will run at MAX
@@ -37,6 +37,10 @@ extern enum main_state_enum main_state;
 
 // Actual motor states
 extern struct encoder LDef_Encoder, LOff_Encoder, RDef_Encoder, ROff_Encoder;
+
+// Stall state of motors
+extern enum stall_state_enum stall_state;
+extern int16_t stall_position;
 
 // Limit switches
 uint8_t switch_image;
@@ -85,6 +89,9 @@ int main(void)
     // Should already be off
     Stop_All_Motors();
 
+    // MSP should start in WAIT state
+    main_state = WAIT;
+
     // Outer superloop, checks overall MSP state
     while (1) {
 
@@ -93,7 +100,7 @@ int main(void)
         // Wait for start signal from Pi
         while (main_state == WAIT) {
             Stop_All_Motors();
-            SetInitialState();
+            SetInitialStates();
         }
 
         /*************************** CALIBRATE ***************************/
@@ -409,6 +416,58 @@ int main(void)
             }
 
         } // PLAY loop
+
+        Stop_All_Motors();                          // Stops motor when entering STALL_RECOVERY from PLAY state
+        while (main_state == STALL_RECOVERY) {
+            int duty, recovery_target;
+            switch (stall_state) {
+            case RDEF_STALLED:
+                recovery_target = (stall_position < (ldef_encoder_range >> 1)) ?
+                                   stall_position + (ldef_encoder_range >> 1) : stall_position - (ldef_encoder_range >> 1);
+                duty = LinearControl(LDef_Encoder.count - recovery_target);
+                if (duty > 0) {
+                    SetDir_LDef(LDef_Encoder.count < recovery_target ? FORWARD : REVERSE);
+                    SetDuty_LDef(duty);
+                } else {
+                    main_state = PLAY;
+                }
+                break;
+            case ROFF_STALLED:
+                recovery_target = (stall_position < (loff_encoder_range >> 1)) ?
+                                       stall_position + (loff_encoder_range >> 1) : stall_position - (loff_encoder_range >> 1);
+                duty = LinearControl(LOff_Encoder.count - recovery_target);
+                if (duty > 0) {
+                    SetDir_LOff(LOff_Encoder.count < recovery_target ? FORWARD : REVERSE);
+                    SetDuty_LOff(duty);
+                } else {
+                    main_state = PLAY;
+                }
+                break;
+            case LDEF_STALLED:
+                duty = RotationalControl(RDef_Encoder.count - (rdef_encoder_360_deg >> 2));
+                if (duty > 0) {
+                    SetDir_RDef(RDef_Encoder.count < (rdef_encoder_360_deg >> 2) ? FORWARD : REVERSE);
+                    SetDuty_RDef(duty);
+                } else {
+                    main_state = PLAY;
+                }
+                break;
+            case LOFF_STALLED:
+                duty = RotationalControl(ROff_Encoder.count - (roff_encoder_360_deg >> 2));
+                if (duty > 0) {
+                    SetDir_ROff(ROff_Encoder.count < (roff_encoder_360_deg >> 2) ? FORWARD : REVERSE);
+                    SetDuty_ROff(duty);
+                } else {
+                    main_state = PLAY;
+                }
+                break;
+            case NONE_STALLED:
+            case MULTIPLE_STALLED:
+            default:
+                Stop_All_Motors();
+                main_state = WAIT;
+            }
+        }
     } // Superloop
 
     Stop_All_Motors();
@@ -461,14 +520,14 @@ void SetInitialStates() {
     offense_shoot_state = WIND_UP;
     defense_shoot_state = WIND_UP;
 
-    // MSP should start in WAIT state
-    main_state = WAIT;
-
     // Start all motors in FIND_MIN calibration state
     ldef_calibrate_state = FIND_MIN;
     loff_calibrate_state = FIND_MIN;
     rdef_calibrate_state = FIND_MIN;
     roff_calibrate_state = FIND_MIN;
+
+    // Assume no motors are stalled at initial state
+    stall_state = NONE_STALLED;
 }
 
 void ConfigureDebugGPIO() {
