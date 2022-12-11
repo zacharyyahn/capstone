@@ -1,3 +1,4 @@
+CC		   = gcc
 OPTFLAGS   = -Wall -O2
 SDL_LIBS   = `sdl-config --static-libs`
 SDL_CFLAGS = `sdl-config --cflags`
@@ -10,12 +11,12 @@ OBJ        = $(CSRC:.c=.o)
 
 all: $(TARGET)
 
-%.o: %.c
+%.o: %.c %.h
 	$(CC) $(CFLAGS)  -c -o $@ $<
 
 $(TARGET): $(OBJ)
 	$(CC) -o $@ $(OBJ) $(LDFLAGS)
 
 clean:
-	rm $(OBJ) $(TARGET)
+	rm -f $(OBJ) $(TARGET)
 

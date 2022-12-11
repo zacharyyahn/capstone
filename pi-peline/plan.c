@@ -1,3 +1,4 @@
+#include <time.h>
 #include <errno.h>
 #include "plan.h"
 
@@ -194,9 +195,13 @@ void command_msp() {
         data  = rods[r].rot_state;
         buf[4*r + 3] = index | data;
     }
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
     if (write(msp_fd, buf, 8) <= 0) {
         perror("error writing bytes to msp");
     }
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    dprintf(2, "time to write bytes to msp (ms): %ld\n", (start_time.tv_sec - end_time.tv_sec)*1000 + (start_time.tv_nsec - end_time.tv_nsec)/1000000);
    // printf("\n");
 }
 

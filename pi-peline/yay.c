@@ -91,26 +91,13 @@ Uint32 height = 0;
 char *vfilename;
 FILE *fpointer;
 Uint8 *y_data, *cr_data, *cb_data, *tmp_data;
-Uint16 zoom = 1;
-Uint16 min_zoom = 1;
 Uint16 frame = 0;
-Uint8 grid = 0;
 Uint8 bpp = 0;
 int cfidc = 1;
-int sp = 0;
-
 
 static const Uint8 SubWidthC[4] =
 {
     0, 2, 2, 1
-};
-static const Uint8 SubHeightC[4] =
-{
-    0, 2, 1, 1
-};
-static const Uint8 SubSizeC[4] =
-{
-    0, 4, 2, 1
 };
 static const Uint8 MbWidthC[4] =
 {
@@ -119,10 +106,6 @@ static const Uint8 MbWidthC[4] =
 static const Uint8 MbHeightC[4] =
 {
     0, 8, 16, 16
-};
-static const Uint8 FrameSize2C[4] =
-{
-    2, 3, 4, 6
 };
 
 int load_frame(__u8 *buf){
@@ -168,7 +151,6 @@ void convert_chroma_to_420()
 }
 
 void draw_frame(){
-    Sint16 x, y;
     Uint16 i;
 
     /* Fill in pixel data - the pitches array contains the length of a line in each plane*/
@@ -202,29 +184,12 @@ void draw_frame(){
     }
     convert_chroma_to_420();
 
-    if(grid){
-        // horizontal grid lines
-        for(y=0; y<height; y=y+16){
-            for(x=0; x<width; x+=8){
-                *(my_overlay->pixels[0] + y   * my_overlay->pitches[0] + x  ) = 0xF0;
-                *(my_overlay->pixels[0] + y   * my_overlay->pitches[0] + x+4  ) = 0x20;
-            }
-        }
-        // vertical grid lines
-        for(x=0; x<width; x=x+16){
-            for(y=0; y<height; y+=8){
-                *(my_overlay->pixels[0] + y   * my_overlay->pitches[0] + x  ) = 0xF0;
-                *(my_overlay->pixels[0] + (y+4)   * my_overlay->pitches[0] + x  ) = 0x20;
-            }
-        }
-    }
-
     SDL_UnlockYUVOverlay(my_overlay);
 
     video_rect.x = 0;
     video_rect.y = 0;
-    video_rect.w = width*zoom;
-    video_rect.h = height*zoom;
+    video_rect.w = width;
+    video_rect.h = height;
 
     SDL_DisplayYUVOverlay(my_overlay, &video_rect);
 }
@@ -259,7 +224,7 @@ int init_SDL() {
     else
         vflags = SDL_SWSURFACE;
 
-    if ((screen = SDL_SetVideoMode(width*zoom, height*zoom, bpp, vflags)) == 0) {
+    if ((screen = SDL_SetVideoMode(width, height, bpp, vflags)) == 0) {
         fprintf(stderr, "SDL ERROR Video mode set failed: %s\n", SDL_GetError() );
         SDL_Quit(); exit(0);
     }
