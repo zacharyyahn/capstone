@@ -12,7 +12,8 @@
 
 #define STATIONARY_TOLERANCE 5
 
-enum stall_state_enum {
+enum stall_state_enum
+{
     ROFF_STALLED,
     RDEF_STALLED,
     LDEF_STALLED,
