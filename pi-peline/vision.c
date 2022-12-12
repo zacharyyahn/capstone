@@ -425,7 +425,6 @@ int main () {
     struct ball_state b;
     int have_prev_pos = 0;
     int interpolated_frames = 0;
-    struct timespec start_time, end_time;
     for (cur_buf = &bs0; !quit; cur_buf = (cur_buf == &bs0) ? &bs1 : &bs0) {
         if (ioctl(v0, VIDIOC_DQBUF, cur_buf)) {
             perror("error dequeueing buffer");
