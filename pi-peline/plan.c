@@ -158,37 +158,12 @@ void move_player_to_y (struct rod *r, float y) {
 
 // send the desired state to the MSP
 void command_msp() {
-    for (int i = 0; i < NUM_RODS; i++) {
-        printf("rod %d:\tstate: ", i);
-        switch (rods[i].rot_state) {
-        case BLOCK:
-            printf("BLOCK\t");
-            break;
-        case READY:
-            printf("READY\t");
-            break;
-        case SHOOT:
-            printf("SHOOT\t");
-            break;
-        case FANCY_SHOOT:
-            printf("FANCY\t");
-            break;
-        case SPIN:
-            printf("SPIN \t");
-            break;
-        default:
-            break;
-        }
-        printf("y: %f\n", rods[i].y);
-    }
-
     char buf[8];
     char index, data;
     int encoder_count_y;
     for (int r = 0; r < NUM_RODS; r++) {
         // assume msp y axis is opposite of table space y axis
         encoder_count_y = rods[r].encoder_travel * (1 - rods[r].y / rods[r].travel);
-    //    printf("rod %d encoder count: %d\n", r, encoder_count_y);
         
         // linear data, from least to most significant 5-bit chunk
         for (int char_i = 0; char_i < 3; char_i++) {
@@ -205,7 +180,6 @@ void command_msp() {
     if (write(msp_fd, buf, 8) <= 0) {
         perror("error writing bytes to msp");
     }
-    printf("\n");
 }
 
 // Plan where to move the rods 
