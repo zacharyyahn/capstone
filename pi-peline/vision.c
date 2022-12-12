@@ -413,11 +413,6 @@ int main () {
         return -1;
     }
 
-    int timing_fd = open("timing.txt", O_WRONLY | O_TRUNC | O_CREAT, 00644);
-    if (timing_fd < 0) {
-        perror("error opening timing output file");
-        exit(1);
-    }
 
     // main loop: dequeue, process, then re-enqueue each buffer until q is pressed
     struct v4l2_buffer *cur_buf;
@@ -439,7 +434,6 @@ int main () {
         dt = (cur_buf->timestamp.tv_sec - prev_timestamp.tv_sec)*1000000 + (cur_buf->timestamp.tv_usec - prev_timestamp.tv_usec);
         prev_timestamp = cur_buf->timestamp;
 
-        clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
         loss_function((__u8 *) cur_buf->m.userptr, losses);
         find_corners((__u8 *) cur_buf->m.userptr, &bottom_left, &bottom_right, losses);
         
@@ -468,9 +462,6 @@ int main () {
         b.v_x = vel.x * 1000000;  // convert velocity to mm/s
         b.v_y = vel.y * 1000000;
         plan_rod_movement(&b, have_prev_pos);
-
-        clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-        dprintf(timing_fd, "%ld\n", (end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec));
 
         if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, exists)) return -1;
         handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);

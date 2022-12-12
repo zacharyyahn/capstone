@@ -129,8 +129,14 @@ void move_player_to_y (struct rod *r, float y) {
         return;
     }
 
-    int chosen_player;
-    if (y >= r->player_base[1] - PLAYER_FOOT_RADIUS && y <= r->player_base[1] + r->travel + PLAYER_FOOT_RADIUS) {
+    int chosen_player; 
+    if (r->prev_player == 1 && y >= r->player_base[1] - PLAYER_FOOT_RADIUS && y <= r->player_base[1] + r->travel + PLAYER_FOOT_RADIUS) {
+        chosen_player = 1;
+    } else if (r->prev_player == 0 && y <= r->player_base[0] + r->travel + PLAYER_FOOT_RADIUS) {
+        chosen_player = 0;
+    } else if (r->prev_player == 2 && y >= r->player_base[2] - PLAYER_FOOT_RADIUS) {
+        chosen_player = 2;
+    } else if (y >= r->player_base[1] - PLAYER_FOOT_RADIUS && y <= r->player_base[1] + r->travel + PLAYER_FOOT_RADIUS) {
         chosen_player = 1;
     } else if (y <= r->player_base[0] + r->travel + PLAYER_FOOT_RADIUS) {
         chosen_player = 0;
@@ -143,7 +149,8 @@ void move_player_to_y (struct rod *r, float y) {
     }
 
     r->y = y - r->player_base[chosen_player];
-    
+    r->prev_player = chosen_player;
+
     // might assign an r->y outside bounds because player's feet don't reach all the way to the edge of the table
     if (r->y < 0) r->y = 0;
     if (r->y > r->travel) r->y = r->travel;
@@ -152,27 +159,27 @@ void move_player_to_y (struct rod *r, float y) {
 // send the desired state to the MSP
 void command_msp() {
     for (int i = 0; i < NUM_RODS; i++) {
-     //   printf("rod %d:\tstate: ", i);
+        printf("rod %d:\tstate: ", i);
         switch (rods[i].rot_state) {
         case BLOCK:
-       //     printf("BLOCK\t");
+            printf("BLOCK\t");
             break;
         case READY:
-         //   printf("READY\t");
+            printf("READY\t");
             break;
         case SHOOT:
-           // printf("SHOOT\t");
+            printf("SHOOT\t");
             break;
         case FANCY_SHOOT:
-           // printf("FANCY\t");
+            printf("FANCY\t");
             break;
         case SPIN:
-           // printf("SPIN \t");
+            printf("SPIN \t");
             break;
         default:
             break;
         }
-        //printf("y: %f\n", rods[i].y);
+        printf("y: %f\n", rods[i].y);
     }
 
     char buf[8];
@@ -195,14 +202,10 @@ void command_msp() {
         data  = rods[r].rot_state;
         buf[4*r + 3] = index | data;
     }
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
     if (write(msp_fd, buf, 8) <= 0) {
         perror("error writing bytes to msp");
     }
-    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-    dprintf(2, "time to write bytes to msp (ms): %ld\n", (start_time.tv_sec - end_time.tv_sec)*1000 + (start_time.tv_nsec - end_time.tv_nsec)/1000000);
-   // printf("\n");
+    printf("\n");
 }
 
 // Plan where to move the rods 
@@ -217,7 +220,7 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
         command_msp();
         return;
     }
-    
+
     // decide general action state of each rod
     int r;
     for (r = 0; r < NUM_RODS; r++) {

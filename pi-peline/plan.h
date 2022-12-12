@@ -44,6 +44,9 @@ struct rod {
 
     // action state of the rotational motor
     enum rotational_state rot_state;
+
+    // player we chose to use on the previous frame
+    int prev_player;
 };
 
 struct ball_state {

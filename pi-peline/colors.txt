@@ -1,0 +1,11 @@
+target_y: 130
+target_u: 174
+target_v: 98
+left_corner_center: (149, 388)
+right_corner_center: (530, 387)
+left_corner_y: 74
+left_corner_u: 124
+left_corner_v: 111
+right_corner_y: 80
+right_corner_u: 124
+right_corner_v: 110
