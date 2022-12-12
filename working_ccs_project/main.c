@@ -26,6 +26,7 @@
 #define LINEAR_CONTROL_TOLERANCE        5           // Linear motor acceptable desired vs actual encoder delta
 #define ROTATIONAL_CONTROL_TOLERANCE    10          // Rotational motor acceptable desired vs actual encoder delta
 #define MAX_SPEED_ERROR_THRESHOLD       200         // Linear motor encoder delta above which motor will run at MAX
+#define ROTATIONAL_FUDGE_FACTOR         25          // Manually adjust rotational center position
 
 
 // Commands from Pi
@@ -230,8 +231,8 @@ int main(void)
                 break;
             case GOTO_DEFAULT:
                 // Move players to vertical position
-                SetDir_RDef(RDef_Encoder.count < 0 ? FORWARD : REVERSE);
-                SetDuty_RDef(RotationalControl(RDef_Encoder.count));
+                SetDir_RDef(RDef_Encoder.count < ROTATIONAL_FUDGE_FACTOR ? FORWARD : REVERSE);
+                SetDuty_RDef(RotationalControl(RDef_Encoder.count - ROTATIONAL_FUDGE_FACTOR));
                 break;
             default:
                 // Should be unreachable
@@ -277,8 +278,8 @@ int main(void)
                 break;
             case GOTO_DEFAULT:
                 // Move players to vertical position
-                SetDir_ROff(ROff_Encoder.count < 0 ? FORWARD : REVERSE);
-                SetDuty_ROff(RotationalControl(ROff_Encoder.count));
+                SetDir_ROff(ROff_Encoder.count < ROTATIONAL_FUDGE_FACTOR ? FORWARD : REVERSE);
+                SetDuty_ROff(RotationalControl(ROff_Encoder.count - ROTATIONAL_FUDGE_FACTOR));
                 break;
             default:
                 // Should be unreachable
@@ -315,14 +316,14 @@ int main(void)
             switch (offense_rotstate) {
             case BLOCK:
                 // Move players to vertical position
-                SetDir_ROff(ROff_Encoder.count < 0 ? FORWARD : REVERSE);
-                SetDuty_ROff(RotationalControl(ROff_Encoder.count));
+                SetDir_ROff(ROff_Encoder.count < ROTATIONAL_FUDGE_FACTOR ? FORWARD : REVERSE);
+                SetDuty_ROff(RotationalControl(ROff_Encoder.count - ROTATIONAL_FUDGE_FACTOR));
                 offense_shoot_state = WIND_UP;
                 break;
             case READY:
                 // Move players to pos 90deg
-                SetDir_ROff(ROff_Encoder.count < (roff_encoder_360_deg >> 2) ? FORWARD : REVERSE);
-                SetDuty_ROff(RotationalControl(ROff_Encoder.count - (roff_encoder_360_deg >> 2)));
+                SetDir_ROff(ROff_Encoder.count < ((roff_encoder_360_deg >> 2) + ROTATIONAL_FUDGE_FACTOR) ? FORWARD : REVERSE);
+                SetDuty_ROff(RotationalControl(ROff_Encoder.count - ((roff_encoder_360_deg >> 2) + ROTATIONAL_FUDGE_FACTOR)));
                 offense_shoot_state = WIND_UP;
                 break;
             case FANCY_SHOOT:
@@ -368,14 +369,14 @@ int main(void)
             switch (defense_rotstate) {
             case BLOCK:
                 // Move players to vertical position
-                SetDir_RDef(RDef_Encoder.count < 0 ? FORWARD : REVERSE);
-                SetDuty_RDef(RotationalControl(RDef_Encoder.count));
+                SetDir_RDef(RDef_Encoder.count < ROTATIONAL_FUDGE_FACTOR ? FORWARD : REVERSE);
+                SetDuty_RDef(RotationalControl(RDef_Encoder.count - ROTATIONAL_FUDGE_FACTOR));
                 defense_shoot_state = WIND_UP;
                 break;
             case READY:
                 // Move players to pos 90deg
-                SetDir_RDef(RDef_Encoder.count < (rdef_encoder_360_deg >> 2) ? FORWARD : REVERSE);
-                SetDuty_RDef(RotationalControl(RDef_Encoder.count - (rdef_encoder_360_deg >> 2)));
+                SetDir_RDef(RDef_Encoder.count < ((rdef_encoder_360_deg >> 2) + ROTATIONAL_FUDGE_FACTOR) ? FORWARD : REVERSE);
+                SetDuty_RDef(RotationalControl(RDef_Encoder.count - ((rdef_encoder_360_deg >> 2) + ROTATIONAL_FUDGE_FACTOR)));
                 defense_shoot_state = WIND_UP;
                 break;
             case FANCY_SHOOT:
