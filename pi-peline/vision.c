@@ -267,7 +267,7 @@ void write_settings() {
 }
 
 int main () {
-    //init_plan();
+    init_plan();
     init_SDL();
     read_settings();
 
@@ -461,7 +461,7 @@ int main () {
         b.y = rel_pos.y;
         b.v_x = vel.x * 1000000;  // convert velocity to mm/s
         b.v_y = vel.y * 1000000;
-       // plan_rod_movement(&b, have_prev_pos);
+        plan_rod_movement(&b, have_prev_pos);
 
         if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, exists)) return -1;
         handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
@@ -472,7 +472,7 @@ int main () {
         }
     }  // end main loop
 
-    //shutdown_plan();
+    shutdown_plan();
 
     if (ioctl(v0, VIDIOC_STREAMOFF, &buf_type)) {
         perror("error stopping stream");
