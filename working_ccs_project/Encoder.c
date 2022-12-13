@@ -9,8 +9,8 @@
 
 struct encoder LDef_Encoder, LOff_Encoder, RDef_Encoder, ROff_Encoder;
 
-void Encoder_Init() {
-
+void Encoder_Init ()
+{
     // Configure encoder signal pins as input
     LDEF_ENC_PORT->DIR &= ~(ENC_A_BIT | ENC_B_BIT);
     LOFF_ENC_PORT->DIR &= ~(ENC_A_BIT | ENC_B_BIT);
@@ -49,68 +49,68 @@ void Encoder_Init() {
     NVIC->IP[PORT2_IRQn] =  (0x04 << 5);
     NVIC->IP[PORT3_IRQn] =  (0x04 << 5);
     NVIC->IP[PORT4_IRQn] =  (0x04 << 5);
-
 }
 
-void RDEF_IRQ() {
+void RDEF_IRQ ()
+{
     P3->OUT |= BIT0;
     // Check current state vs. stored state to determine forward vs back
     // increment or decrement count
     enum encoder_state state = RDEF_ENC_PORT->IN & (ENC_A_BIT | ENC_B_BIT);
     switch (state) {
-    case STATE_11:
-        switch (RDef_Encoder.state) {
-        case STATE_10:
-            RDef_Encoder.count--;
-            break;
-        case STATE_01:
-            RDef_Encoder.count++;
-            break;
-        default:
-            // unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
-        break;
-    case STATE_10:
-		switch (RDef_Encoder.state) {
-        case STATE_00:
-            RDef_Encoder.count--;
-			break;
         case STATE_11:
-            RDef_Encoder.count++;
-			break;
-        default:
-            // unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
+            switch (RDef_Encoder.state) {
+                case STATE_10:
+                    RDef_Encoder.count--;
+                break;
+                case STATE_01:
+                    RDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
         break;
-    case STATE_01:
-		switch (RDef_Encoder.state) {
-        case STATE_11:
-            RDef_Encoder.count--;
-			break;
-        case STATE_00:
-            RDef_Encoder.count++;
-            break;
-        default:
-			// unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
-        break;
-    case STATE_00:
-		switch (RDef_Encoder.state) {
-        case STATE_01:
-            RDef_Encoder.count--;
-			break;
         case STATE_10:
-            RDef_Encoder.count++;
-			break;
-        default:
-			// unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
+            switch (RDef_Encoder.state) {
+                case STATE_00:
+                    RDef_Encoder.count--;
+                break;
+                case STATE_11:
+                    RDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
         break;
-    default:
+        case STATE_01:
+            switch (RDef_Encoder.state) {
+                case STATE_11:
+                    RDef_Encoder.count--;
+                break;
+                case STATE_00:
+                    RDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
+        break;
+        case STATE_00:
+            switch (RDef_Encoder.state) {
+                case STATE_01:
+                    RDef_Encoder.count--;
+                break;
+                case STATE_10:
+                    RDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
+        break;
+        default:
         break;
     } // end switch new state
 
@@ -125,64 +125,65 @@ void RDEF_IRQ() {
     P3->OUT &= ~BIT0;
 }
 
-void ROFF_IRQ() {
+void ROFF_IRQ ()
+{
     // Check current state vs. stored state to determine forward vs back
     // increment or decrement count
     enum encoder_state state = ROFF_ENC_PORT->IN & (ENC_A_BIT | ENC_B_BIT);
     switch (state) {
-    case STATE_11:
-        switch (ROff_Encoder.state) {
-        case STATE_10:
-            ROff_Encoder.count--;
-            break;
-        case STATE_01:
-            ROff_Encoder.count++;
-            break;
-        default:
-            // unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
-        break;
-    case STATE_10:
-        switch (ROff_Encoder.state) {
-        case STATE_00:
-            ROff_Encoder.count--;
-            break;
         case STATE_11:
-            ROff_Encoder.count++;
-            break;
-        default:
-            // unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
+            switch (ROff_Encoder.state) {
+                case STATE_10:
+                    ROff_Encoder.count--;
+                break;
+                case STATE_01:
+                    ROff_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
         break;
-    case STATE_01:
-        switch (ROff_Encoder.state) {
-        case STATE_11:
-            ROff_Encoder.count--;
-            break;
-        case STATE_00:
-            ROff_Encoder.count++;
-            break;
-        default:
-            // unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
-        break;
-    case STATE_00:
-        switch (ROff_Encoder.state) {
-        case STATE_01:
-            ROff_Encoder.count--;
-            break;
         case STATE_10:
-            ROff_Encoder.count++;
-            break;
-        default:
-            // unreachable unless we miss an encoder edge
-            break;
-        } // end switch old state
+            switch (ROff_Encoder.state) {
+                case STATE_00:
+                    ROff_Encoder.count--;
+                break;
+                case STATE_11:
+                    ROff_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
         break;
-    default:
+        case STATE_01:
+            switch (ROff_Encoder.state) {
+                case STATE_11:
+                    ROff_Encoder.count--;
+                break;
+                case STATE_00:
+                    ROff_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
+        break;
+        case STATE_00:
+            switch (ROff_Encoder.state) {
+                case STATE_01:
+                    ROff_Encoder.count--;
+                break;
+                case STATE_10:
+                    ROff_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
+        break;
+        default:
         break;
     } // end switch new state
 
@@ -196,64 +197,65 @@ void ROFF_IRQ() {
     ROFF_ENC_PORT->IFG &= ~(ENC_A_BIT | ENC_B_BIT);
 }
 
-void LDEF_IRQ() {
+void LDEF_IRQ ()
+{
     // Check current state vs. stored state to determine forward vs back
     // increment or decrement count
     enum encoder_state state = LDEF_ENC_PORT->IN & (ENC_A_BIT | ENC_B_BIT);
     switch (state) {
-    case STATE_11:
-        switch (LDef_Encoder.state) {
-        case STATE_10:
-            LDef_Encoder.count--;
-			break;
-        case STATE_01:
-            LDef_Encoder.count++;
-			break;
-		default:
-			// unreachable unless we miss an encoder edge
-			break;
-        } // end switch old state
-        break;
-    case STATE_10:
-        switch (LDef_Encoder.state) {
-        case STATE_00:
-            LDef_Encoder.count--;
-			break;
         case STATE_11:
-            LDef_Encoder.count++;
-			break;
-		default:
-			// unreachable unless we miss an encoder edge
-			break;
-        } // end switch old state
+            switch (LDef_Encoder.state) {
+                case STATE_10:
+                    LDef_Encoder.count--;
+                break;
+                case STATE_01:
+                    LDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
         break;
-    case STATE_01:
-        switch (LDef_Encoder.state) {
-        case STATE_11:
-            LDef_Encoder.count--;
-			break;
-        case STATE_00:
-            LDef_Encoder.count++;
-			break;
-		default:
-			// unreachable unless we miss an encoder edge
-			break;
-        } // end switch old state
-        break;
-    case STATE_00:
-        switch (LDef_Encoder.state) {
-        case STATE_01:
-            LDef_Encoder.count--;
-			break;
         case STATE_10:
-            LDef_Encoder.count++;
-			break;
-		default:
-			// unreachable unless we miss an encoder edge
-			break;
-        } // end switch old state
+            switch (LDef_Encoder.state) {
+                case STATE_00:
+                    LDef_Encoder.count--;
+                break;
+                case STATE_11:
+                    LDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
         break;
-    default:
+        case STATE_01:
+            switch (LDef_Encoder.state) {
+                case STATE_11:
+                    LDef_Encoder.count--;
+                break;
+                case STATE_00:
+                    LDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
+        break;
+        case STATE_00:
+            switch (LDef_Encoder.state) {
+                case STATE_01:
+                    LDef_Encoder.count--;
+                break;
+                case STATE_10:
+                    LDef_Encoder.count++;
+                break;
+                default:
+                    // unreachable unless we miss an encoder edge
+                break;
+            } // end switch old state
+        break;
+        default:
         break;
     } // end switch new state
 
@@ -267,65 +269,66 @@ void LDEF_IRQ() {
     LDEF_ENC_PORT->IFG &= ~(ENC_A_BIT | ENC_B_BIT);
 }
 
-void LOFF_IRQ() {
+void LOFF_IRQ ()
+{
     // Check current state vs. stored state to determine forward vs back
     // increment or decrement count
     enum encoder_state state = LOFF_ENC_PORT->IN & (ENC_A_BIT | ENC_B_BIT);
     switch (state) {
-    case STATE_11:
-        switch (LOff_Encoder.state) {
-        case STATE_10:
-            LOff_Encoder.count++;
+        case STATE_11:
+            switch (LOff_Encoder.state) {
+            case STATE_10:
+                LOff_Encoder.count++;
             break;
-        case STATE_01:
-            LOff_Encoder.count--;
+            case STATE_01:
+                LOff_Encoder.count--;
             break;
-        default:
-            // unreachable unless we miss an encoder edge
+            default:
+                // unreachable unless we miss an encoder edge
             break;
         } // end switch old state
-        break;
+    break;
     case STATE_10:
         switch (LOff_Encoder.state) {
-        case STATE_00:
-            LOff_Encoder.count++;
+            case STATE_00:
+                LOff_Encoder.count++;
             break;
-        case STATE_11:
-            LOff_Encoder.count--;
+            case STATE_11:
+                LOff_Encoder.count--;
             break;
-        default:
-            // unreachable unless we miss an encoder edge
+            default:
+                // unreachable unless we miss an encoder edge
             break;
         } // end switch old state
-        break;
+    break;
     case STATE_01:
         switch (LOff_Encoder.state) {
-        case STATE_11:
-            LOff_Encoder.count++;
+            case STATE_11:
+                LOff_Encoder.count++;
             break;
-        case STATE_00:
-            LOff_Encoder.count--;
+            case STATE_00:
+                LOff_Encoder.count--;
             break;
-        default:
-            // unreachable unless we miss an encoder edge
+            default:
+                // unreachable unless we miss an encoder edge
             break;
         } // end switch old state
-        break;
+    break;
     case STATE_00:
         switch (LOff_Encoder.state) {
-        case STATE_01:
-            LOff_Encoder.count++;
+            case STATE_01:
+                LOff_Encoder.count++;
             break;
-        case STATE_10:
-            LOff_Encoder.count--;
+            case STATE_10:
+                LOff_Encoder.count--;
             break;
-        default:
-            // unreachable unless we miss an encoder edge
+            default:
+                // unreachable unless we miss an encoder edge
             break;
         } // end switch old state
-        break;
+    break;
     default:
-        break;
+    break;
     } // end switch new state
 
     // Toggle IES
@@ -337,5 +340,3 @@ void LOFF_IRQ() {
     // Clear interrupt flag
     LOFF_ENC_PORT->IFG &= ~(ENC_A_BIT | ENC_B_BIT);
 }
-
-

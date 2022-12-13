@@ -23,7 +23,8 @@
 #define ENC_A_BIT BIT6
 #define ENC_B_BIT BIT7
 
-enum encoder_state {
+enum encoder_state
+{
     STATE_11 = 0xC0,
     STATE_10 = 0x80,
     STATE_01 = 0x40,

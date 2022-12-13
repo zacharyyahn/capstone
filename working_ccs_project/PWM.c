@@ -3,8 +3,8 @@
 // Indicate which pin should be producing a PWM signal for a given motor. Should only be set using setters
 uint8_t RDef_PWM_Pin, ROff_PWM_Pin, LDef_PWM_Pin, LOff_PWM_Pin;
 
-void PWM_Init () {
-
+void PWM_Init ()
+{
     // P6.0 -> LDef_IN1, P6.1 -> LDef_IN2
     // P6.4 -> LOff_IN1, P6.5 -> LOff_IN2
     // Sets as output
@@ -68,51 +68,59 @@ void PWM_Init () {
 
     // Reset before beginning use
     TIMER_A0->CTL |= TIMER_A_CTL_CLR;
-
 }
 
 // duty must be 0-11998 inclusive
-void SetDuty_LDef (uint16_t duty) {
+void SetDuty_LDef (uint16_t duty)
+{
     if (duty >= 11999) return;
     TIMER_A0->CCR[LDEF_CCR_INDEX] = duty;
 }
 
-void Stop_LDef () {
+void Stop_LDef ()
+{
     SetDuty_LDef(0);
     LINEAR_CONTROL_PORT->OUT &= ~(LDEF_IN1_BIT | LDEF_IN2_BIT);
 }
 
-void SetDuty_LOff (uint16_t duty) {
+void SetDuty_LOff (uint16_t duty)
+{
     if (duty >= 11999) return;
     TIMER_A0->CCR[LOFF_CCR_INDEX] = duty;
 }
 
-void Stop_LOff () {
+void Stop_LOff ()
+{
     SetDuty_LOff(0);
     LINEAR_CONTROL_PORT->OUT &= ~(LOFF_IN1_BIT | LOFF_IN2_BIT);
 }
 
-void SetDuty_RDef (uint16_t duty) {
+void SetDuty_RDef (uint16_t duty)
+{
     if (duty >= 11999) return;
     TIMER_A0->CCR[RDEF_CCR_INDEX] = duty;
 }
 
-void Stop_RDef () {
+void Stop_RDef ()
+{
     SetDuty_RDef(0);
     ROTATIONAL_CONTROL_PORT->OUT &= ~(RDEF_IN1_BIT | RDEF_IN2_BIT);
 }
 
-void SetDuty_ROff (uint16_t duty) {
+void SetDuty_ROff (uint16_t duty)
+{
     if (duty >= 11999) return;
     TIMER_A0->CCR[ROFF_CCR_INDEX] = duty;
 }
 
-void Stop_ROff () {
+void Stop_ROff ()
+{
     SetDuty_ROff(0);
     ROTATIONAL_CONTROL_PORT->OUT &= ~(ROFF_IN1_BIT | ROFF_IN2_BIT);
 }
 
-void Stop_All_Motors () {
+void Stop_All_Motors ()
+{
     Stop_LOff();
     Stop_ROff();
     Stop_LDef();
@@ -120,99 +128,119 @@ void Stop_All_Motors () {
 }
 
 // Setter for direction flag for rotational defense motor
-void SetDir_RDef (enum direction dir) {
-    switch (dir) {
-    case FORWARD:
-        ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN2_BIT;
-        RDef_PWM_Pin = RDEF_IN1_BIT;
+void SetDir_RDef (enum direction dir)
+{
+    switch (dir)
+    {
+        case FORWARD:
+            ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN2_BIT;
+            RDef_PWM_Pin = RDEF_IN1_BIT;
         break;
-    case REVERSE:
-        ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN1_BIT;
-        RDef_PWM_Pin = RDEF_IN2_BIT;
+        case REVERSE:
+            ROTATIONAL_CONTROL_PORT->OUT &= ~RDEF_IN1_BIT;
+            RDef_PWM_Pin = RDEF_IN2_BIT;
         break;
-    default:
+        default:
         break;
     }
 }
 
 // Setter for direction flag for rotational offense motor
-void SetDir_ROff (enum direction dir) {
-    switch (dir) {
-    case FORWARD:
-        ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN2_BIT;
-        ROff_PWM_Pin = ROFF_IN1_BIT;
+void SetDir_ROff (enum direction dir)
+{
+    switch (dir)
+    {
+        case FORWARD:
+            ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN2_BIT;
+            ROff_PWM_Pin = ROFF_IN1_BIT;
         break;
-    case REVERSE:
-        ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN1_BIT;
-        ROff_PWM_Pin = ROFF_IN2_BIT;
+        case REVERSE:
+            ROTATIONAL_CONTROL_PORT->OUT &= ~ROFF_IN1_BIT;
+            ROff_PWM_Pin = ROFF_IN2_BIT;
         break;
-    default:
+        default:
         break;
     }
 }
 
 // Setter for direction flag for linear defense motor
-void SetDir_LDef (enum direction dir) {
-    switch (dir) {
-    case FORWARD:
-        LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN2_BIT;
-        LDef_PWM_Pin = LDEF_IN1_BIT;
-		break;
-    case REVERSE:
-        LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN1_BIT;
-        LDef_PWM_Pin = LDEF_IN2_BIT;
-		break;
-	default:
-		break;
+void SetDir_LDef (enum direction dir)
+{
+        switch (dir)
+        {
+        case FORWARD:
+            LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN2_BIT;
+            LDef_PWM_Pin = LDEF_IN1_BIT;
+        break;
+        case REVERSE:
+            LINEAR_CONTROL_PORT->OUT &= ~LDEF_IN1_BIT;
+            LDef_PWM_Pin = LDEF_IN2_BIT;
+        break;
+        default:
+        break;
     }
 }
 
 // Setter for direction flag for linear offense motor
 // NOTE: motor flipped mechanically from original orientation
-void SetDir_LOff (enum direction dir) {
-    switch (dir) {
-    case REVERSE:
-        LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN2_BIT;
-        LOff_PWM_Pin = LOFF_IN1_BIT;
-		break;
-    case FORWARD:
-        LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN1_BIT;
-        LOff_PWM_Pin = LOFF_IN2_BIT;
-		break;
-	default:
-		break;
+void SetDir_LOff (enum direction dir)
+{
+    switch (dir)
+    {
+        case REVERSE:
+            LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN2_BIT;
+            LOff_PWM_Pin = LOFF_IN1_BIT;
+        break;
+        case FORWARD:
+            LINEAR_CONTROL_PORT->OUT &= ~LOFF_IN1_BIT;
+            LOff_PWM_Pin = LOFF_IN2_BIT;
+        break;
+        default:
+        break;
     }
 }
 
-void TA0_0_IRQHandler() {
-
+void TA0_0_IRQHandler()
+{
     // Linear defense reset
-    if (TIMER_A0->CCR[LDEF_CCR_INDEX] == 0) {
+    if (0 == TIMER_A0->CCR[LDEF_CCR_INDEX])
+    {
         // Special case where 0 duty cycle is desired; hard set both IN1 and IN2 to 0 regardless of dir
         LINEAR_CONTROL_PORT->OUT &= ~(LDEF_IN1_BIT | LDEF_IN2_BIT);
-    } else {
+    }
+    else
+    {
         // Else, set each PWM signal for each motor high depending on direction
         LINEAR_CONTROL_PORT->OUT |= LDef_PWM_Pin;
     }
 
     // Linear offense reset
-    if (TIMER_A0->CCR[LOFF_CCR_INDEX] == 0) {
+    if (0 == TIMER_A0->CCR[LOFF_CCR_INDEX])
+    {
         LINEAR_CONTROL_PORT->OUT &= ~(LOFF_IN1_BIT | LOFF_IN2_BIT);
-    } else {
+    }
+    else
+    {
         LINEAR_CONTROL_PORT->OUT |= LOff_PWM_Pin;
     }
 
     // Rotational defense reset
-    if (TIMER_A0->CCR[RDEF_CCR_INDEX] == 0) {
+    if (0 == TIMER_A0->CCR[RDEF_CCR_INDEX])
+    {
         ROTATIONAL_CONTROL_PORT->OUT &= ~(RDEF_IN1_BIT | RDEF_IN2_BIT);
-    } else {
+    }
+    else
+    {
         ROTATIONAL_CONTROL_PORT->OUT |= RDef_PWM_Pin;
     }
 
     // Rotational offense reset
-    if (TIMER_A0->CCR[ROFF_CCR_INDEX] == 0) {
+    if (0 == TIMER_A0->CCR[ROFF_CCR_INDEX])
+    {
         ROTATIONAL_CONTROL_PORT->OUT &= ~(ROFF_IN1_BIT | ROFF_IN2_BIT);
-    } else {
+    }
+    else
+    {
         ROTATIONAL_CONTROL_PORT->OUT |= ROff_PWM_Pin;
     }
 
@@ -220,21 +248,26 @@ void TA0_0_IRQHandler() {
     TIMER_A0->CCTL[0] &= ~TIMER_A_CCTLN_CCIFG;
 }
 
-void TA0_N_IRQHandler() {
+void TA0_N_IRQHandler ()
+{
     // Set low signal on active signal pin if interrupt flag for that register is set
-    if (TIMER_A0->CCTL[LDEF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG) {
+    if (TIMER_A0->CCTL[LDEF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG)
+    {
         LINEAR_CONTROL_PORT->OUT &= ~LDef_PWM_Pin;
         TIMER_A0->CCTL[LDEF_CCR_INDEX] &= ~TIMER_A_CCTLN_CCIFG;
     }
-    if (TIMER_A0->CCTL[LOFF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG) {
+    if (TIMER_A0->CCTL[LOFF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG)
+    {
         LINEAR_CONTROL_PORT->OUT &= ~LOff_PWM_Pin;
         TIMER_A0->CCTL[LOFF_CCR_INDEX] &= ~TIMER_A_CCTLN_CCIFG;
     }
-    if (TIMER_A0->CCTL[RDEF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG) {
+    if (TIMER_A0->CCTL[RDEF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG)
+    {
         ROTATIONAL_CONTROL_PORT->OUT &= ~RDef_PWM_Pin;
         TIMER_A0->CCTL[RDEF_CCR_INDEX] &= ~TIMER_A_CCTLN_CCIFG;
     }
-    if (TIMER_A0->CCTL[ROFF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG) {
+    if (TIMER_A0->CCTL[ROFF_CCR_INDEX] & TIMER_A_CCTLN_CCIFG)
+    {
         ROTATIONAL_CONTROL_PORT->OUT &= ~ROff_PWM_Pin;
         TIMER_A0->CCTL[ROFF_CCR_INDEX] &= ~TIMER_A_CCTLN_CCIFG;
     }
