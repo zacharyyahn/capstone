@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <linux/types.h>
+#include <stdint.h>
 #include <termio.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -28,10 +28,10 @@ enum rotational_state {
 
 struct rod {
     // constants
-    float x; // fixed x pos
-    float travel; // in mm
-    __u16 encoder_travel; // in encoder counts
-    int num_players; // number of players in the player set
+    float x;                            // fixed x pos
+    float travel;                       // in mm
+    uint16_t encoder_travel;            // in encoder counts
+    int num_players;                    // number of players in the player set
     float player_base[PLAYERS_PER_ROD]; // position of the players at one extreme positioning
                                         // range of player values are player_base[i] to player_base[i] + travel
 
@@ -56,7 +56,7 @@ struct ball_state {
     float v_y;
 };
 
-void init_plan();
+void init_plan(int no_msp_arg);
 
 void start_msp();
 
@@ -66,7 +66,7 @@ void return_to_default();
 
 void command_msp();
 
-void plot_player_pos(__u8* filtered, int rod_num, float rod_pos);
+void plot_player_pos(uint8_t* filtered, int rod_num, float rod_pos);
 
 void plan_rod_movement(struct ball_state *b, int have_ball_pos);
 

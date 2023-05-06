@@ -4,9 +4,11 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include <assert.h>
 #include <time.h>
 #include <errno.h>
+#include <getopt.h>
 #include "videodev2.h"
 #include "table.h"
 #include "yay.h"
@@ -25,9 +27,9 @@
 
 
 // globals
-__u8 target_y = 255;
-__u8 target_u = 128;
-__u8 target_v = 128;
+uint8_t target_y = 255;
+uint8_t target_u = 128;
+uint8_t target_v = 128;
 
 int loss_contrast_booster = 0;
 
@@ -37,12 +39,12 @@ int ball_exists_calibrate = 0;
 
 struct xy left_corner_center = {0, 0};
 struct xy right_corner_center = {0, 0};
-__u8 left_corner_y = 255;
-__u8 left_corner_u = 128;
-__u8 left_corner_v = 128;
-__u8 right_corner_y = 255;
-__u8 right_corner_u = 128;
-__u8 right_corner_v = 128;
+uint8_t left_corner_y = 255;
+uint8_t left_corner_u = 128;
+uint8_t left_corner_v = 128;
+uint8_t right_corner_y = 255;
+uint8_t right_corner_u = 128;
+uint8_t right_corner_v = 128;
 int corner_loss_threshold = 15;
 int corner_threshold_calibrate = 0;
 
@@ -51,7 +53,7 @@ int do_output = 1;
 // end globals
 
 
-void loss_function (__u8 *image, __u8 *losses) {
+void loss_function (uint8_t *image, uint8_t *losses) {
     int i, C_loss;
     for (i = 0; i < BUF_SIZE; i += 4) {
         C_loss = (target_u > image[i+1] ? target_u - image[i+1] : image[i+1] - target_u) +
@@ -77,7 +79,7 @@ void loss_function (__u8 *image, __u8 *losses) {
     }
 }
 
-void find_corners (__u8 *image, struct xy *bottom_left, struct xy *bottom_right, __u8 *losses) {
+void find_corners (uint8_t *image, struct xy *bottom_left, struct xy *bottom_right, uint8_t *losses) {
     int bottom_left_start_y  = (left_corner_center.y - CORNER_RADIUS) > 0 ?
                                left_corner_center.y - CORNER_RADIUS : 0;
     int bottom_left_end_y    = (left_corner_center.y + CORNER_RADIUS) <= HEIGHT ?
@@ -173,7 +175,7 @@ void find_corners (__u8 *image, struct xy *bottom_left, struct xy *bottom_right,
 }
 
 // returns 1 and sets ball position if a ball is found, otherwise returns 0
-int find_center (__u8 *losses, __u8 *exists, struct xyf *ball_pos, struct xy *bottom_left, struct xy *bottom_right) {
+int find_center (uint8_t *losses, uint8_t *exists, struct xyf *ball_pos, struct xy *bottom_left, struct xy *bottom_right) {
     struct xy top_left, top_right;
     top_left.x = bottom_left->x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right->y - bottom_left->y);
     top_left.y = bottom_left->y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left->x - bottom_right->x);
@@ -266,17 +268,24 @@ void write_settings() {
     }
 }
 
-int main () {
-    init_plan();
+int main (int argc, char *argv[]) {
+    int no_msp = 0;
+    struct option long_options[] = {
+        {"no-msp", no_argument, &no_msp, 1},
+        {0,        0,           0,       0}
+    };
+    while (getopt_long(argc, argv, "", long_options, NULL) >= 0) {}
+
+    init_plan(no_msp);
     init_SDL();
     read_settings();
 
     /******************* SET UP IMAGE PROCESSING *******************/
-    __u8 losses[WIDTH*HEIGHT];
+    uint8_t losses[WIDTH*HEIGHT];
     memset(&losses, 0, sizeof(losses));
-    __u8 exists[WIDTH*HEIGHT];
+    uint8_t exists[WIDTH*HEIGHT];
     memset(&exists, 0, sizeof(exists));
-    __u8 filtered[WIDTH*HEIGHT];
+    uint8_t filtered[WIDTH*HEIGHT];
     memset(&filtered, 0xFF, sizeof(filtered));
 
 
@@ -372,7 +381,7 @@ int main () {
 
 
     /******************* BUFFER 0 SETUP *******************/
-    __u8 buf0[BUF_SIZE];
+    uint8_t buf0[BUF_SIZE];
     assert(sizeof(buf0) == BUF_SIZE);
     memset(&buf0, 0, sizeof(buf0));
 
@@ -386,7 +395,7 @@ int main () {
 
 
     /******************* BUFFER 1 SETUP *******************/
-    __u8 buf1[BUF_SIZE];
+    uint8_t buf1[BUF_SIZE];
     assert(sizeof(buf1) == BUF_SIZE);
     memset(&buf1, 0, sizeof(buf1));
 
@@ -433,8 +442,8 @@ int main () {
         dt = (cur_buf->timestamp.tv_sec - prev_timestamp.tv_sec)*1000000 + (cur_buf->timestamp.tv_usec - prev_timestamp.tv_usec);
         prev_timestamp = cur_buf->timestamp;
 
-        loss_function((__u8 *) cur_buf->m.userptr, losses);
-        find_corners((__u8 *) cur_buf->m.userptr, &bottom_left, &bottom_right, losses);
+        loss_function((uint8_t *) cur_buf->m.userptr, losses);
+        find_corners((uint8_t *) cur_buf->m.userptr, &bottom_left, &bottom_right, losses);
         
         if (find_center(losses, exists, &ball_pos, &bottom_left, &bottom_right)) {
             relative_position(&bottom_left, &bottom_right, &ball_pos, &rel_pos);
@@ -462,8 +471,8 @@ int main () {
         b.v_y = vel.y * 1000000;
         plan_rod_movement(&b, have_prev_pos);
 
-        if (do_output && output_SDL((__u8 *) cur_buf->m.userptr, losses, exists)) return -1;
-        handle_SDL_events((__u8 *) cur_buf->m.userptr, losses);
+        if (do_output && output_SDL((uint8_t *) cur_buf->m.userptr, losses, exists)) return -1;
+        handle_SDL_events((uint8_t *) cur_buf->m.userptr, losses);
 
         if (ioctl(v0, VIDIOC_QBUF, cur_buf)) {
             perror("error enqueueing buffer 0");
@@ -486,3 +495,4 @@ int main () {
 
     return 0;
 }
+

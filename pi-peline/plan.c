@@ -4,9 +4,12 @@
 
 struct rod rods[NUM_RODS];
 int msp_fd;
+int no_msp;
 int fun_mode = 0;
 
-void init_plan() {
+void init_plan(int no_msp_arg) {
+    no_msp = no_msp_arg;
+
     // common attributes
     int r, p;
     for (r = 0; r < NUM_RODS; r++) {
@@ -23,7 +26,8 @@ void init_plan() {
     
     
     // set up serial communication to MSP
-    // hopefully this is the right device, might be ACM1 instead
+    if (no_msp) return;
+
     dprintf(2, "waiting for MSP to open...");
     msp_fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
     while (msp_fd < 0) {
@@ -82,6 +86,8 @@ void init_plan() {
 }
 
 void start_msp() {
+    if (no_msp) return;
+
     printf("starting msp\n");
     char buf = PLAY_CODE;
     if (write(msp_fd, &buf, 1) <= 0) {
@@ -90,6 +96,8 @@ void start_msp() {
 }
 
 void pause_msp() {
+    if (no_msp) return;
+
     printf("pausing msp\n");
     char buf = WAIT_CODE;
     if (write(msp_fd, &buf, 1) <= 0) {
@@ -158,6 +166,8 @@ void move_player_to_y (struct rod *r, float y) {
 
 // send the desired state to the MSP
 void command_msp() {
+    if (no_msp) return;
+    
     char buf[8];
     char index, data;
     int encoder_count_y;
@@ -266,6 +276,8 @@ void plan_rod_movement(struct ball_state *b, int have_ball_pos) {
 }
 
 void shutdown_plan() {
+    if (no_msp) return;
+    
     char buf = WAIT_CODE;
     if (write(msp_fd, &buf, 1) <= 0) {
         perror("error writing bytes to msp");

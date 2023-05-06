@@ -14,3 +14,4 @@ plt.xlabel("Image processing time (ms)")
 plt.ylabel("Number of frames")
 plt.title(f"Image processing time distribution over {len(times)} frames")
 plt.show()
+

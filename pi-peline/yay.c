@@ -24,10 +24,6 @@
 
 */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include "yay.h"
 #include "plan.h"
 #include "vision.h"
@@ -36,16 +32,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include "regex.h"
-
-//#include "SDL.h"
 #include <SDL/SDL.h>
+
 
 // globals
 #define WIDTH 640
 #define HEIGHT 480
-extern __u8 target_y;
-extern __u8 target_u;
-extern __u8 target_v;
+extern uint8_t target_y;
+extern uint8_t target_u;
+extern uint8_t target_v;
 
 extern int loss_contrast_booster;
 
@@ -54,12 +49,12 @@ extern int ball_exists_calibrate;
 
 extern struct xy left_corner_center;
 extern struct xy right_corner_center;
-extern __u8 left_corner_y;
-extern __u8 left_corner_u;
-extern __u8 left_corner_v;
-extern __u8 right_corner_y;
-extern __u8 right_corner_u;
-extern __u8 right_corner_v;
+extern uint8_t left_corner_y;
+extern uint8_t left_corner_u;
+extern uint8_t left_corner_v;
+extern uint8_t right_corner_y;
+extern uint8_t right_corner_u;
+extern uint8_t right_corner_v;
 extern int corner_loss_threshold;
 extern int corner_threshold_calibrate;
 
@@ -67,6 +62,7 @@ extern int quit;
 extern int do_output;
 extern int fun_mode;
 // end globals
+
 
 enum {
     SET_BALL,
@@ -86,29 +82,29 @@ SDL_Rect        video_rect;
 SDL_Overlay     *my_overlay;
 const SDL_VideoInfo* info = NULL;
 
-Uint32 width = 0;
-Uint32 height = 0;
+uint32_t width = 0;
+uint32_t height = 0;
 char *vfilename;
 FILE *fpointer;
-Uint8 *y_data, *cr_data, *cb_data, *tmp_data;
-Uint16 frame = 0;
-Uint8 bpp = 0;
+uint8_t *y_data, *cr_data, *cb_data, *tmp_data;
+uint16_t frame = 0;
+uint8_t bpp = 0;
 int cfidc = 1;
 
-static const Uint8 SubWidthC[4] =
+static const uint8_t SubWidthC[4] =
 {
     0, 2, 2, 1
 };
-static const Uint8 MbWidthC[4] =
+static const uint8_t MbWidthC[4] =
 {
     0, 8, 8, 16
 };
-static const Uint8 MbHeightC[4] =
+static const uint8_t MbHeightC[4] =
 {
     0, 8, 16, 16
 };
 
-int load_frame(__u8 *buf){
+int load_frame(uint8_t *buf){
     /* Fill in video data */
     if (cfidc == 0) {
         int i;
@@ -151,7 +147,7 @@ void convert_chroma_to_420()
 }
 
 void draw_frame(){
-    Uint16 i;
+    uint16_t i;
 
     /* Fill in pixel data - the pitches array contains the length of a line in each plane*/
     SDL_LockYUVOverlay(my_overlay);
@@ -217,7 +213,7 @@ int init_SDL() {
         SDL_Quit(); exit(0);
     }
 
-    Uint32 vflags;
+    uint32_t vflags;
     bpp = info->vfmt->BitsPerPixel;
     if(info->hw_available)
         vflags = SDL_HWSURFACE;
@@ -242,15 +238,15 @@ int init_SDL() {
     }
 
     /* should allocate memory for y_data, cr_data, cb_data here */
-    y_data  = malloc(width * height * sizeof(Uint8));
-    cb_data = malloc(width * height * sizeof(Uint8) / 2);
-    cr_data = malloc(width * height * sizeof(Uint8) / 2);
-    tmp_data = malloc(width * height * sizeof(Uint8) * 2);
+    y_data  = malloc(width * height * sizeof(uint8_t));
+    cb_data = malloc(width * height * sizeof(uint8_t) / 2);
+    cr_data = malloc(width * height * sizeof(uint8_t) / 2);
+    tmp_data = malloc(width * height * sizeof(uint8_t) * 2);
 
     return 0;
 }
 
-void handle_SDL_events (__u8 *buf, __u8 *losses) {
+void handle_SDL_events (uint8_t *buf, uint8_t *losses) {
     while (SDL_PollEvent(&event)) {
         switch(event.type) {
         case SDL_MOUSEBUTTONDOWN:
@@ -407,7 +403,7 @@ void handle_SDL_events (__u8 *buf, __u8 *losses) {
     }
 }
 
-int output_SDL (__u8 *image, __u8 *losses, __u8 *filtered) {
+int output_SDL (uint8_t *image, uint8_t *losses, uint8_t *filtered) {
     char caption[64];
     int threshold = corner_threshold_calibrate ? corner_loss_threshold : ball_exists_loss_threshold;
     switch (click_mode) {

@@ -1,4 +1,4 @@
-CC		   = gcc
+CC         = gcc
 OPTFLAGS   = -Wall -O2
 SDL_LIBS   = `sdl-config --static-libs`
 SDL_CFLAGS = `sdl-config --cflags`
