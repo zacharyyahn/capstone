@@ -132,6 +132,7 @@ dmypy.json
 .vscode
 
 # binaries and object files
-pi-peline/pi
+pi-peline/play
+pi-peline/viewlog
 *.o
 

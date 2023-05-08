@@ -5,18 +5,17 @@ SDL_CFLAGS = `sdl-config --cflags`
 CFLAGS     = $(OPTFLAGS)  $(SDL_CFLAGS)
 LDFLAGS    = $(SDL_LIBS) 
 
-CSRC       = yay.c vision.c plan.c
-TARGET     = pi
-OBJ        = $(CSRC:.c=.o)
+PLAYSRC    = yay.c vision.c plan.c replay.c
+PLAYOBJ    = $(PLAYSRC:.c=.o)
 
-all: $(TARGET)
+all: play
 
 %.o: %.c %.h
 	$(CC) $(CFLAGS)  -c -o $@ $<
 
-$(TARGET): $(OBJ)
-	$(CC) -o $@ $(OBJ) $(LDFLAGS)
+play: $(PLAYOBJ)
+	$(CC) -o $@ $(PLAYOBJ) $(LDFLAGS)
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f $(PLAYOBJ) play
 

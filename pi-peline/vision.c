@@ -13,16 +13,10 @@
 #include "table.h"
 #include "yay.h"
 #include "plan.h"
+#include "replay.h"
 #include "vision.h"
 
-#define WIDTH                   640
-#define HEIGHT                  480
-#define PIXEL_FORMAT            V4L2_PIX_FMT_YUYV
-#define BYTES_PER_PIXEL         2
-#define BUF_SIZE                WIDTH*HEIGHT*BYTES_PER_PIXEL
-
 #define CORNER_RADIUS           25
-
 #define MAX_INTERPOLATED_FRAMES 3
 
 
@@ -268,17 +262,76 @@ void write_settings() {
     }
 }
 
+FILE *create_log_file() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm *datetime = localtime(&ts.tv_sec);
+
+    char filename[100];
+    snprintf(filename, 100, "logs/foosball-%d-%02d-%02d-%02d:%02d:%02d.log", 
+             datetime->tm_year+1900, datetime->tm_mon+1, datetime->tm_mday, datetime->tm_hour, datetime->tm_min, datetime->tm_sec);
+    
+    FILE *fptr = fopen(filename, "wbx");
+    if (fptr == NULL) {
+        perror("error creating file");
+        exit(1);
+    }
+
+    // write a dummy value to the start of the file to make room for storing the number of frames written later
+    int dummy_num = 0;
+    if (fwrite(&dummy_num, sizeof(dummy_num), 1, fptr) != 1) {
+        dprintf(2, "Error writing dummy frame count to file");
+        exit(1);
+    }
+
+    return fptr;
+};
+
 int main (int argc, char *argv[]) {
     int no_msp = 0;
+    int logging = 0;
+    int replay = 0;
+    FILE *replay_fptr = NULL;
     struct option long_options[] = {
-        {"no-msp", no_argument, &no_msp, 1},
-        {0,        0,           0,       0}
+        {"no-msp", no_argument,       &no_msp,  1},
+        {"log",    no_argument,       &logging, 1},
+        {"replay", required_argument, NULL,     2},
+        {0,        0,                 0,        0}
     };
-    while (getopt_long(argc, argv, "", long_options, NULL) >= 0) {}
+    while (1) {
+        int opt_code = getopt_long(argc, argv, "", long_options, NULL);
+        if (opt_code < 0) break;
+
+        switch (opt_code) {
+        case 2:
+            replay = 1;
+            replay_fptr = fopen(optarg, "rb");
+            if (replay_fptr == NULL) {
+                perror("error opening replay file");
+                return -1;
+            }
+            break;
+        case '?':
+            return -1;
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (replay) {
+        no_msp = 1;
+        if (logging) {
+            dprintf(2, "Warning: --log and --replay options are mutually exclusive, ignoring --log\n");
+            logging = 0;
+        }
+    }
 
     init_plan(no_msp);
     init_SDL();
     read_settings();
+    FILE *log_fptr = logging ? create_log_file() : NULL;
+
 
     /******************* SET UP IMAGE PROCESSING *******************/
     uint8_t losses[WIDTH*HEIGHT];
@@ -384,6 +437,9 @@ int main (int argc, char *argv[]) {
     uint8_t buf0[BUF_SIZE];
     assert(sizeof(buf0) == BUF_SIZE);
     memset(&buf0, 0, sizeof(buf0));
+    if (replay && init_replay(replay_fptr, (uint8_t *) &buf0)) {
+        return -1;
+    }
 
     struct v4l2_buffer bs0;
     memset(&bs0, 0, sizeof(bs0));
@@ -409,23 +465,27 @@ int main (int argc, char *argv[]) {
 
 
     /******************* START STREAM *******************/
-    if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
-        perror("error enqueueing buffer 0");
-        return -1;
-    }
-    if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
-        perror("error enqueueing buffer 1");
-        return -1;
-    }
-    if (ioctl(v0, VIDIOC_STREAMON, &buf_type)) {
-        perror("error starting stream");
-        return -1;
+    if (!replay) {
+        if (ioctl(v0, VIDIOC_QBUF, &bs0)) {
+            perror("error enqueueing buffer 0");
+            return -1;
+        }
+        if (ioctl(v0, VIDIOC_QBUF, &bs1)) {
+            perror("error enqueueing buffer 1");
+            return -1;
+        }
+        if (ioctl(v0, VIDIOC_STREAMON, &buf_type)) {
+            perror("error starting stream");
+            return -1;
+        }
     }
 
 
     // main loop: dequeue, process, then re-enqueue each buffer until q is pressed
     struct v4l2_buffer *cur_buf;
     struct timeval prev_timestamp = {-1, -1};
+    struct frameinfo cur_frameinfo;
+    int frames_written = 0;
     int dt;
     struct xy bottom_left, bottom_right;
     struct xyf ball_pos, rel_pos;
@@ -434,11 +494,16 @@ int main (int argc, char *argv[]) {
     struct ball_state b;
     int have_prev_pos = 0;
     int interpolated_frames = 0;
-    for (cur_buf = &bs0; !quit; cur_buf = (cur_buf == &bs0) ? &bs1 : &bs0) {
-        if (ioctl(v0, VIDIOC_DQBUF, cur_buf)) {
+    for (cur_buf = &bs0; !quit; cur_buf = replay ? cur_buf : ((cur_buf == &bs0) ? &bs1 : &bs0)) {
+        if (!replay && ioctl(v0, VIDIOC_DQBUF, cur_buf)) {
             perror("error dequeueing buffer");
             return -1;
         }
+        
+        if (replay) {
+            get_replay_timestamps(&cur_buf->timestamp, &prev_timestamp);
+        }
+
         dt = (cur_buf->timestamp.tv_sec - prev_timestamp.tv_sec)*1000000 + (cur_buf->timestamp.tv_usec - prev_timestamp.tv_usec);
         prev_timestamp = cur_buf->timestamp;
 
@@ -471,11 +536,24 @@ int main (int argc, char *argv[]) {
         b.v_y = vel.y * 1000000;
         plan_rod_movement(&b, have_prev_pos);
 
-        if (do_output && output_SDL((uint8_t *) cur_buf->m.userptr, losses, exists)) return -1;
-        handle_SDL_events((uint8_t *) cur_buf->m.userptr, losses);
+        if (do_output && output_SDL((uint8_t *) cur_buf->m.userptr, losses, exists, replay)) return -1;
+        handle_SDL_events((uint8_t *) cur_buf->m.userptr, losses, replay);
 
-        if (ioctl(v0, VIDIOC_QBUF, cur_buf)) {
-            perror("error enqueueing buffer 0");
+        if (logging) {
+            cur_frameinfo.seq = cur_buf->sequence;
+            cur_frameinfo.tv_sec = cur_buf->timestamp.tv_sec;
+            cur_frameinfo.tv_usec = cur_buf->timestamp.tv_usec;
+            if (fwrite(&cur_frameinfo, sizeof(cur_frameinfo), 1, log_fptr) != 1) {
+                dprintf(2, "Error writing frame info\n");
+            }
+            if (fwrite((uint8_t *) cur_buf->m.userptr, 1, BUF_SIZE, log_fptr) != BUF_SIZE) {
+                dprintf(2, "Error writing frame\n");
+            }
+            frames_written++;
+        }
+
+        if (!replay && ioctl(v0, VIDIOC_QBUF, cur_buf)) {
+            perror("error enqueueing buffer");
             return -1;
         }
     }  // end main loop
@@ -492,6 +570,18 @@ int main (int argc, char *argv[]) {
 
     cleanup_SDL();
     write_settings();
+
+    if (logging) {
+        if (fseek(log_fptr, 0, SEEK_SET)) {
+            perror("error seeking to start of log file");
+        }
+        if (fwrite(&frames_written, sizeof(frames_written), 1, log_fptr) != 1) {
+            dprintf(2, "Error writing number of frames written\n");
+        }
+        if (fclose(log_fptr)) {
+            perror("error closing log file");
+        }
+    }
 
     return 0;
 }
