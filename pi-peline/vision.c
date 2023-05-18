@@ -11,7 +11,7 @@
 #include <getopt.h>
 #include "videodev2.h"
 #include "table.h"
-#include "yay.h"
+#include "display.h"
 #include "plan.h"
 #include "replay.h"
 #include "vision.h"

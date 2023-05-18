@@ -1,30 +1,4 @@
-/*
-
-    yay - fast and simple yuv viewer
-
-    (c) 2005-2010 by Matthias Wientapper
-    (m.wientapper@gmx.de)
-
-    Support of multiple formats added by Cuero Bugot.
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-    02110-1301, USA.
-
-*/
-
-#include "yay.h"
+#include "display.h"
 #include "plan.h"
 #include "vision.h"
 #include "replay.h"
@@ -32,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "regex.h"
-#include <SDL/SDL.h>
+#include <SDL2/SDL.h>
 
 
 // globals
@@ -77,119 +51,53 @@ enum {
 
 int play_video = 0;
 struct timespec next_frame_time;
+int show_hud = 0;
 
-SDL_Surface     *screen;
-SDL_Rect        video_rect;
-SDL_Overlay     *my_overlay;
-const SDL_VideoInfo* info = NULL;
-
-uint8_t *y_data, *cr_data, *cb_data;
-uint8_t bpp = 0;
-int cfidc = 1;
-
-static const uint8_t SubWidthC[4] =
-{
-    0, 2, 2, 1
-};
-static const uint8_t MbWidthC[4] =
-{
-    0, 8, 8, 16
-};
-static const uint8_t MbHeightC[4] =
-{
-    0, 8, 16, 16
-};
+SDL_Window *screen;
+SDL_Renderer *renderer;
+SDL_Texture *color_texture;
+uint8_t greyscale_buffer[BUF_SIZE];
 
 
-int load_frame_to_buffers(uint8_t *buf) {
-    /* Fill in video data */
-    if (cfidc == 0) {
-        int i;
-        for (i = 0; i < WIDTH*HEIGHT; i++) {
-            y_data[i] = buf[i];
-        }
-        return 0;
-    } else if (cfidc == 2) {
-        int i;
+int draw_frame (uint8_t *image, uint8_t *losses, uint8_t *filtered) {
+    uint8_t *framebuffer, *greyscale_source;
 
-        for(i = 0; i < WIDTH*HEIGHT*2; i+=4) {
-            y_data[i/2]  = buf[i];
-            cb_data[i/4] = buf[i+1];
-            y_data[i/2+1]= buf[i+2];
-            cr_data[i/4] = buf[i+3];
-        }
-        return 0;
-    } else {
-        printf("I don't know how to print this -f option D:\n");
+    switch (output_mode) {
+    case COLOR:
+        framebuffer = image;
+        break;
+    case LOSS:
+        framebuffer = greyscale_buffer;
+        greyscale_source = losses;
+        break;
+    case FILTER:
+        framebuffer = greyscale_buffer;
+        greyscale_source = filtered;
+        break;
+    default:
+        dprintf(2, "unknown output mode\n");
         return 1;
     }
+
+    if ((output_mode == LOSS) || (output_mode == FILTER)) {
+        for (int i = 0; i < WIDTH * HEIGHT; i++) {
+            framebuffer[i << 1] = greyscale_source[i];
+            framebuffer[(i << 1) + 1] = 128;
+        }
+    }
+
+    SDL_UpdateTexture(color_texture, NULL, framebuffer, WIDTH * BYTES_PER_PIXEL);
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, color_texture, NULL, NULL);
+    SDL_RenderPresent(renderer);
+    return 0;
 }
 
-void convert_chroma_to_420()
-{
-    int i, j;
-    //printf("%dx%d\n",WIDTH, HEIGHT);
-    if (cfidc >0) {
-        for(j=0; j<HEIGHT/2; j++)
-            for(i=0; i<WIDTH/2; i++) {
-                my_overlay->pixels[1][j*my_overlay->pitches[1]+i] = cr_data[i*MbWidthC[cfidc]/8+j*(WIDTH/SubWidthC[cfidc])*MbHeightC[cfidc]/8];
-                my_overlay->pixels[2][j*my_overlay->pitches[2]+i] = cb_data[i*MbWidthC[cfidc]/8+j*(WIDTH/SubWidthC[cfidc])*MbHeightC[cfidc]/8];
-            }
-    } else {
-        for (i = 0; i < HEIGHT/2; i++) {
-            memset(my_overlay->pixels[1]+i*my_overlay->pitches[1], 128, WIDTH/2);
-            memset(my_overlay->pixels[2]+i*my_overlay->pitches[2], 128, WIDTH/2);
-        }
-    }
-}
+void draw_hud() {
 
-void draw_frame(){
-    uint16_t i;
-
-    /* Fill in pixel data - the pitches array contains the length of a line in each plane*/
-    SDL_LockYUVOverlay(my_overlay);
-
-    // we cannot be sure, that buffers are contiguous in memory
-    if (WIDTH != my_overlay->pitches[0]) {
-        for (i = 0; i < HEIGHT; i++) {
-            memcpy(my_overlay->pixels[0]+i*my_overlay->pitches[0], y_data+i*WIDTH, WIDTH);
-        }
-    } else {
-        memcpy(my_overlay->pixels[0], y_data, WIDTH*HEIGHT);
-    }
-
-    if (cfidc == 1) {
-        if (WIDTH != my_overlay->pitches[1]) {
-            for (i = 0; i < HEIGHT/2; i++) {
-                memcpy(my_overlay->pixels[1]+i*my_overlay->pitches[1], cr_data+i*WIDTH/2, WIDTH/2);
-            }
-        } else {
-            memcpy(my_overlay->pixels[1], cr_data, WIDTH*HEIGHT/4);
-        }
-
-        if (WIDTH != my_overlay->pitches[2]) {
-            for (i = 0; i < HEIGHT/2; i++) {
-                memcpy(my_overlay->pixels[2]+i*my_overlay->pitches[2], cb_data+i*WIDTH/2, WIDTH/2);
-            }
-        } else {
-            memcpy(my_overlay->pixels[2], cb_data, WIDTH*HEIGHT/4);
-        }
-    }
-    convert_chroma_to_420();
-
-    SDL_UnlockYUVOverlay(my_overlay);
-
-    video_rect.x = 0;
-    video_rect.y = 0;
-    video_rect.w = WIDTH;
-    video_rect.h = HEIGHT;
-
-    SDL_DisplayYUVOverlay(my_overlay, &video_rect);
 }
 
 int init_SDL() {
-    cfidc = output_mode == COLOR ? 2 : 0;
-
     // SDL init
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "Unable to set video mode: %s\n", SDL_GetError());
@@ -197,40 +105,21 @@ int init_SDL() {
     }
     atexit(SDL_Quit);
 
-    info = SDL_GetVideoInfo();
-    if (!info) {
-        fprintf(stderr, "SDL ERROR Video query failed: %s\n", SDL_GetError() );
-        SDL_Quit(); exit(0);
-    }
-
-    uint32_t vflags;
-    bpp = info->vfmt->BitsPerPixel;
-    if(info->hw_available)
-        vflags = SDL_HWSURFACE;
-    else
-        vflags = SDL_SWSURFACE;
-
-    if ((screen = SDL_SetVideoMode(WIDTH, HEIGHT, bpp, vflags)) == 0) {
-        fprintf(stderr, "SDL ERROR Video mode set failed: %s\n", SDL_GetError() );
-        SDL_Quit(); exit(0);
-    }
-
-    // DEBUG output
-    // printf("SDL Video mode set successfully. \nbbp: %d\nHW: %d\nWM: %d\n",
-    // 	info->vfmt->BitsPerPixel, info->hw_available, info->wm_available);
-
-    SDL_EnableKeyRepeat(500, 10);
-
-    my_overlay = SDL_CreateYUVOverlay(WIDTH, HEIGHT, SDL_YV12_OVERLAY, screen);
-    if (!my_overlay) { //Couldn't create overlay?
-        fprintf(stderr, "Couldn't create overlay\n"); //Output to stderr and quit
+    screen = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_INPUT_GRABBED);
+    if (screen == NULL) {
+        dprintf(2, "Error creating SDL window: %s\n", SDL_GetError());
         exit(1);
     }
+    
+    renderer = SDL_CreateRenderer(screen, -1, 0);
+    if (renderer == NULL) {
+        dprintf(2, "Error creating SDL renderer: %s\n", SDL_GetError());
+    }
 
-    /* should allocate memory for y_data, cr_data, cb_data here */
-    y_data  = malloc(WIDTH * HEIGHT * sizeof(uint8_t));
-    cb_data = malloc(WIDTH * HEIGHT * sizeof(uint8_t) / 2);
-    cr_data = malloc(WIDTH * HEIGHT * sizeof(uint8_t) / 2);
+    color_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_YUY2, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+    if (color_texture == NULL) {
+        dprintf(2, "Error creating SDL texture: %s\n", SDL_GetError());
+    }
 
     return 0;
 }
@@ -285,9 +174,7 @@ void handle_one_event (uint8_t *buf, uint8_t *losses, int replay, SDL_Event *eve
     case SDL_QUIT:
         quit = 1;
         break;
-    case SDL_VIDEOEXPOSE:
-        SDL_DisplayYUVOverlay(my_overlay, &video_rect);
-        break;
+
     case SDL_KEYDOWN:
         switch (event->key.keysym.sym) {
         case SDLK_q:
@@ -390,7 +277,6 @@ void handle_one_event (uint8_t *buf, uint8_t *losses, int replay, SDL_Event *eve
             switch (output_mode) {
             case LOSS:
                 output_mode = COLOR;
-                cfidc = 2;
                 loss_contrast_booster = 0;
                 corner_threshold_calibrate = 0;
                 ball_exists_calibrate = 0;
@@ -407,7 +293,6 @@ void handle_one_event (uint8_t *buf, uint8_t *losses, int replay, SDL_Event *eve
             switch (output_mode) {
             case COLOR:
                 output_mode = LOSS;
-                cfidc = 0;
                 break;
             case LOSS:
                 output_mode = FILTER;
@@ -418,6 +303,10 @@ void handle_one_event (uint8_t *buf, uint8_t *losses, int replay, SDL_Event *eve
             default:
                 break;
             } // switch output_mode
+            break;
+
+        case SDLK_h:
+            show_hud = !show_hud;
             break;
 
         default:
@@ -480,33 +369,25 @@ int output_SDL (uint8_t *image, uint8_t *losses, uint8_t *filtered, int replay) 
         snprintf(caption, sizeof(caption), "frame %d of %d, seq = %d, t = %d ms",
                                            get_replay_index(), get_num_replay_frames(), get_replay_seq(), get_replay_msec());
     } else {
-        snprintf(caption, sizeof(caption), " ");
+        snprintf(caption, sizeof(caption), "live feed");
     }
 
-    SDL_WM_SetCaption(caption, NULL);
+    SDL_SetWindowTitle(screen, caption);
 
-    switch (output_mode) {
-    case COLOR:
-        if (load_frame_to_buffers(image)) return 1;
-        break;
-    case LOSS:
-        if (load_frame_to_buffers(losses)) return 1;
-        break;
-    case FILTER:
-        if (load_frame_to_buffers(filtered)) return 1;
-        break;
-    default:
-        printf("unknown output mode");
+    if (draw_frame(image, losses, filtered)) {
         return 1;
     }
-    draw_frame();
+
+    if (show_hud) {
+        draw_hud();
+    }
+
     return 0;
 }
 
 void cleanup_SDL () {
-    SDL_FreeYUVOverlay(my_overlay);
-    free(y_data);
-    free(cb_data);
-    free(cr_data);
+    SDL_DestroyTexture(color_texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(screen);
 }
 

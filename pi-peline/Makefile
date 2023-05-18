@@ -1,11 +1,11 @@
 CC         = gcc
 OPTFLAGS   = -Wall -O2
-SDL_LIBS   = `sdl-config --static-libs`
-SDL_CFLAGS = `sdl-config --cflags`
+SDL_LIBS   = `sdl2-config --static-libs`
+SDL_CFLAGS = `sdl2-config --cflags`
 CFLAGS     = $(OPTFLAGS)  $(SDL_CFLAGS)
 LDFLAGS    = $(SDL_LIBS) 
 
-PLAYSRC    = yay.c vision.c plan.c replay.c
+PLAYSRC    = display.c vision.c plan.c replay.c
 PLAYOBJ    = $(PLAYSRC:.c=.o)
 
 all: play
