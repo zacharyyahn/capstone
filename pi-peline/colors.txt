@@ -1,11 +1,12 @@
-target_y: 134
-target_u: 177
-target_v: 98
-left_corner_center: (156, 380)
-right_corner_center: (534, 385)
-left_corner_y: 69
-left_corner_u: 122
-left_corner_v: 118
-right_corner_y: 63
-right_corner_u: 122
-right_corner_v: 117
+target_y: 148
+target_u: 170
+target_v: 99
+left_corner_center: (151, 384)
+right_corner_center: (531, 387)
+left_corner_y: 119
+left_corner_u: 119
+left_corner_v: 112
+right_corner_y: 111
+right_corner_u: 124
+right_corner_v: 114
+corner_loss_threshold: 20

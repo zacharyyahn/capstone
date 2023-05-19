@@ -26,6 +26,12 @@ enum rotational_state {
     SPIN,
 };
 
+enum selection_state {
+    SELECTED,
+    REACHABLE,
+    UNREACHABLE,
+};
+
 struct rod {
     // constants
     float x;                            // fixed x pos
@@ -41,6 +47,12 @@ struct rod {
     // space / table coordinates. This can be converted into something sensible for the MSP
     // to understand later
     float y;
+
+    // absolute y position in table coordinates where the player plans to intercept the ball
+    float intercept_y;
+
+    // used to mark whether each player is used, could be used, or is unreachable, for debugging
+    enum selection_state player_selection_state[PLAYERS_PER_ROD];
 
     // action state of the rotational motor
     enum rotational_state rot_state;

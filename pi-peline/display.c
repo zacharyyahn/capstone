@@ -1,13 +1,14 @@
 #include "display.h"
-#include "plan.h"
 #include "vision.h"
 #include "replay.h"
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "regex.h"
 #include <SDL2/SDL.h>
 
+#define SELECTED_COLOR          0x00ff00
+#define REACHABLE_COLOR         0x0000ff
+#define UNREACHABLE_COLOR       0xff0000
 
 // globals
 extern uint8_t target_y;
@@ -33,6 +34,8 @@ extern int corner_threshold_calibrate;
 extern int quit;
 extern int do_output;
 extern int fun_mode;
+
+extern struct rod rods[NUM_RODS];
 // end globals
 
 
@@ -89,12 +92,119 @@ int draw_frame (uint8_t *image, uint8_t *losses, uint8_t *filtered) {
     SDL_UpdateTexture(color_texture, NULL, framebuffer, WIDTH * BYTES_PER_PIXEL);
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, color_texture, NULL, NULL);
-    SDL_RenderPresent(renderer);
     return 0;
 }
 
-void draw_hud() {
+void draw_point_of_color (SDL_Renderer *ren, int x, int y, uint32_t color) {
+    uint8_t r = color >> 16;
+    uint8_t g = color >> 8;
+    uint8_t b = color;
+    if (SDL_SetRenderDrawColor(ren, r, g, b, SDL_ALPHA_OPAQUE)) {
+        dprintf(2, "Error setting point color: %s\n", SDL_GetError());
+    }
+    if (SDL_RenderDrawPoint(ren, x, y)) {
+        dprintf(2, "Error drawing point: %s\n", SDL_GetError());
+    }
+}
 
+void draw_line_of_color (SDL_Renderer *ren, int x1, int y1, int x2, int y2, uint32_t color) {
+    uint8_t r = color >> 16;
+    uint8_t g = color >> 8;
+    uint8_t b = color;
+    if (SDL_SetRenderDrawColor(ren, r, g, b, SDL_ALPHA_OPAQUE)) {
+        dprintf(2, "Error setting line color: %s\n", SDL_GetError());
+    }
+    if (SDL_RenderDrawLine(ren, x1, y1, x2, y2)) {
+        dprintf(2, "Error drawing line: %s\n", SDL_GetError());
+    }
+}
+
+void draw_lines_of_color (SDL_Renderer *ren, const SDL_Point *points, int count, uint32_t color) {
+    uint8_t r = color >> 16;
+    uint8_t g = color >> 8;
+    uint8_t b = color;
+    if (SDL_SetRenderDrawColor(ren, r, g, b, SDL_ALPHA_OPAQUE)) {
+        dprintf(2, "Error setting lines color: %s\n", SDL_GetError());
+    }
+    if (SDL_RenderDrawLines(ren, points, count)) {
+        dprintf(2, "Error drawing lines: %s\n", SDL_GetError());
+    }
+}
+
+void draw_player_with_color (SDL_Renderer *ren, int r, int p, uint32_t color) {
+    // draw the rod itself and the extremes of where the players can reach
+    struct xyf base_mid_table, base_back_table, base_front_table, extended_mid_table, extended_back_table, extended_front_table;
+    SDL_Point  base_mid_image, base_back_image, base_front_image, extended_mid_image, extended_back_image, extended_front_image;
+
+    base_mid_table.x = rods[r].x;
+    base_mid_table.y = rods[r].player_base[p] - PLAYER_FOOT_RADIUS;
+
+    base_back_table.x = base_mid_table.x - PLAYER_BACKWARD_REACH;
+    base_back_table.y = base_mid_table.y;
+
+    base_front_table.x = base_mid_table.x + PLAYER_FORWARD_REACH;
+    base_front_table.y = base_mid_table.y;
+
+    extended_mid_table.x = rods[r].x;
+    extended_mid_table.y = rods[r].player_base[p] + rods[r].travel + PLAYER_FOOT_RADIUS;
+
+    extended_back_table.x = extended_mid_table.x - PLAYER_BACKWARD_REACH;
+    extended_back_table.y = extended_mid_table.y;
+
+    extended_front_table.x = extended_mid_table.x + PLAYER_FORWARD_REACH;
+    extended_front_table.y = extended_mid_table.y;
+
+    table_to_image_position(&base_mid_table,   &base_mid_image);
+    table_to_image_position(&base_back_table,  &base_back_image);
+    table_to_image_position(&base_front_table, &base_front_image);
+    table_to_image_position(&extended_mid_table,   &extended_mid_image);
+    table_to_image_position(&extended_back_table,  &extended_back_image);
+    table_to_image_position(&extended_front_table, &extended_front_image);
+
+    draw_line_of_color(ren, base_mid_image.x, base_mid_image.y, extended_mid_image.x, extended_mid_image.y, color);
+    draw_line_of_color(ren, base_back_image.x, base_back_image.y, base_front_image.x, base_front_image.y, color);
+    draw_line_of_color(ren, extended_back_image.x, extended_back_image.y, extended_front_image.x, extended_front_image.y, color);
+}
+
+void draw_hud(struct ball_state *b) {
+    // draw ball position
+    struct xyf ball_pos_table;
+    SDL_Point  ball_pos_image;
+    ball_pos_table.x = b->x;
+    ball_pos_table.y = b->y;
+
+    table_to_image_position(&ball_pos_table, &ball_pos_image);
+    draw_point_of_color(renderer, ball_pos_image.x, ball_pos_image.y, 0x000000);
+
+    // draw projected interceptions
+    for (int r = 0; r < NUM_RODS; r++) {
+        struct xyf intersect_point_table;
+        SDL_Point  intersect_point_image;
+        intersect_point_table.x = rods[r].x;
+        intersect_point_table.y = rods[r].intercept_y;
+
+        table_to_image_position(&intersect_point_table, &intersect_point_image);
+        draw_line_of_color(renderer, ball_pos_image.x, ball_pos_image.y, intersect_point_image.x, intersect_point_image.y, 0x000000);
+    }
+
+    // draw players. order them so that selected players are drawn on top and unreachable players on bottom
+    for (int r = 0; r < NUM_RODS; r++) {
+        for (int p = 0; p < rods[r].num_players; p++) {
+            if (rods[r].player_selection_state[p] == UNREACHABLE) {
+                draw_player_with_color(renderer, r, p, UNREACHABLE_COLOR);
+            }
+        }
+        for (int p = 0; p < rods[r].num_players; p++) {
+            if (rods[r].player_selection_state[p] == REACHABLE) {
+                draw_player_with_color(renderer, r, p, REACHABLE_COLOR);
+            }
+        }
+        for (int p = 0; p < rods[r].num_players; p++) {
+            if (rods[r].player_selection_state[p] == SELECTED) {
+                draw_player_with_color(renderer, r, p, SELECTED_COLOR);
+            }
+        }
+    }
 }
 
 int init_SDL() {
@@ -352,7 +462,7 @@ void handle_SDL_events (uint8_t *buf, uint8_t *losses, int replay) {
     }
 }
 
-int output_SDL (uint8_t *image, uint8_t *losses, uint8_t *filtered, int replay) {
+int output_SDL (uint8_t *image, uint8_t *losses, uint8_t *filtered, struct ball_state *b, int replay) {
     char caption[100];
     
     if (click_mode == SET_BALL) {
@@ -379,8 +489,10 @@ int output_SDL (uint8_t *image, uint8_t *losses, uint8_t *filtered, int replay) 
     }
 
     if (show_hud) {
-        draw_hud();
+        draw_hud(b);
     }
+    
+    SDL_RenderPresent(renderer);
 
     return 0;
 }

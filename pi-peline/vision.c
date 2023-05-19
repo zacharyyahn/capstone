@@ -42,6 +42,8 @@ uint8_t right_corner_v = 128;
 int corner_loss_threshold = 15;
 int corner_threshold_calibrate = 0;
 
+struct xy bottom_left, bottom_right;
+
 int quit = 0;
 int do_output = 1;
 // end globals
@@ -73,7 +75,7 @@ void loss_function (uint8_t *image, uint8_t *losses) {
     }
 }
 
-void find_corners (uint8_t *image, struct xy *bottom_left, struct xy *bottom_right, uint8_t *losses) {
+void find_corners (uint8_t *image, uint8_t *losses) {
     int bottom_left_start_y  = (left_corner_center.y - CORNER_RADIUS) > 0 ?
                                left_corner_center.y - CORNER_RADIUS : 0;
     int bottom_left_end_y    = (left_corner_center.y + CORNER_RADIUS) <= HEIGHT ?
@@ -99,10 +101,10 @@ void find_corners (uint8_t *image, struct xy *bottom_left, struct xy *bottom_rig
     bottom_right_start_x = (bottom_right_start_x % 2) == 0 ? bottom_right_start_x : bottom_right_start_x - 1;
     
     // track min-loss position in the return structs
-    bottom_left->x = bottom_left_end_x - 1;
-    bottom_left->y = bottom_left_start_y;
-    bottom_right->x = bottom_right_start_x;
-    bottom_right->y = bottom_right_start_y;
+    bottom_left.x = bottom_left_end_x - 1;
+    bottom_left.y = bottom_left_start_y;
+    bottom_right.x = bottom_right_start_x;
+    bottom_right.y = bottom_right_start_y;
 
 
     // bottom-left corner
@@ -117,17 +119,17 @@ void find_corners (uint8_t *image, struct xy *bottom_left, struct xy *bottom_rig
 
             // check leftmost pixel first
             if ((left_corner_y > image[pix0]   ? left_corner_y - image[pix0]   : image[pix0]   - left_corner_y) + C_loss < corner_loss_threshold) {
-                if (i - j > bottom_left->y - bottom_left->x) {
-                    bottom_left->x = j;
-                    bottom_left->y = i;
+                if (i - j > bottom_left.y - bottom_left.x) {
+                    bottom_left.x = j;
+                    bottom_left.y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
             }
             // only check rightmost pixel if leftmost isn't a match
             else if ((left_corner_y > image[pix1]   ? left_corner_y - image[pix1]   : image[pix1]   - left_corner_y) + C_loss < corner_loss_threshold) {
-                if (i - (j + 1) > bottom_left->y - bottom_left->x) {
-                    bottom_left->x = j + 1;
-                    bottom_left->y = i;
+                if (i - (j + 1) > bottom_left.y - bottom_left.x) {
+                    bottom_left.x = j + 1;
+                    bottom_left.y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
             }
@@ -146,17 +148,17 @@ void find_corners (uint8_t *image, struct xy *bottom_left, struct xy *bottom_rig
 
             // check rightmost pixel first
             if ((right_corner_y > image[pix1]   ? right_corner_y - image[pix1]   : image[pix1]   - right_corner_y) + C_loss < corner_loss_threshold) {
-                if (i + (j + 1) > bottom_right->y + bottom_right->x) {
-                    bottom_right->x = j + 1;
-                    bottom_right->y = i;
+                if (i + (j + 1) > bottom_right.y + bottom_right.x) {
+                    bottom_right.x = j + 1;
+                    bottom_right.y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j+1] = 130;
             }
             // only check leftmost pixel if rightmost isn't a match
             else if ((right_corner_y > image[pix0]   ? right_corner_y - image[pix0]   : image[pix0]   - right_corner_y) + C_loss < corner_loss_threshold) {
-                if (i + j > bottom_right->y + bottom_right->x) {
-                    bottom_right->x = j;
-                    bottom_right->y = i;
+                if (i + j > bottom_right.y + bottom_right.x) {
+                    bottom_right.x = j;
+                    bottom_right.y = i;
                 }
                 if (corner_threshold_calibrate) losses[i*WIDTH + j] = 130;
             }
@@ -164,22 +166,22 @@ void find_corners (uint8_t *image, struct xy *bottom_left, struct xy *bottom_rig
         }
     }
 
-    losses[bottom_left->x + WIDTH*bottom_left->y] = 0xFF;
-    losses[bottom_right->x + WIDTH*bottom_right->y] = 0xFF;
+    losses[bottom_left.x + WIDTH*bottom_left.y] = 0xFF;
+    losses[bottom_right.x + WIDTH*bottom_right.y] = 0xFF;
 }
 
 // returns 1 and sets ball position if a ball is found, otherwise returns 0
-int find_center (uint8_t *losses, uint8_t *exists, struct xyf *ball_pos, struct xy *bottom_left, struct xy *bottom_right) {
+int find_center (uint8_t *losses, uint8_t *exists, struct xyf *ball_pos) {
     struct xy top_left, top_right;
-    top_left.x = bottom_left->x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right->y - bottom_left->y);
-    top_left.y = bottom_left->y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left->x - bottom_right->x);
-    top_right.x = bottom_right->x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right->y - bottom_left->y);
-    top_right.y = bottom_right->y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left->x - bottom_right->x);   
+    top_left.x = bottom_left.x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right.y - bottom_left.y);
+    top_left.y = bottom_left.y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left.x - bottom_right.x);
+    top_right.x = bottom_right.x + TABLE_HEIGHT / TABLE_LENGTH * (bottom_right.y - bottom_left.y);
+    top_right.y = bottom_right.y + TABLE_HEIGHT / TABLE_LENGTH * (bottom_left.x - bottom_right.x);   
 
     int min_y = top_left.y < top_right.y ? top_left.y : top_right.y;
-    int max_y = bottom_left->y > bottom_right->y ? bottom_left->y : bottom_right->y;
-    int min_x = top_left.x < bottom_left->x ? top_left.x : bottom_left->x;
-    int max_x = top_right.x > bottom_right->x ? top_right.x : bottom_right->x;
+    int max_y = bottom_left.y > bottom_right.y ? bottom_left.y : bottom_right.y;
+    int min_x = top_left.x < bottom_left.x ? top_left.x : bottom_left.x;
+    int max_x = top_right.x > bottom_right.x ? top_right.x : bottom_right.x;
 
     if (min_y < 0) min_y = 0;
     if (min_x < 0) min_x = 0;
@@ -215,14 +217,24 @@ int find_center (uint8_t *losses, uint8_t *exists, struct xyf *ball_pos, struct 
     return 0;
 }
 
-void relative_position (struct xy *bottom_left, struct xy *bottom_right, struct xyf *ball_pos, struct xyf *rel_pos) {
-    float d_squared = (bottom_right->y - bottom_left->y) * (bottom_right->y - bottom_left->y) +
-                      (bottom_right->x - bottom_left->x) * (bottom_right->x - bottom_left->x);
-    rel_pos->x = TABLE_LENGTH / d_squared * ((bottom_right->x - bottom_left->x) * (ball_pos->x - bottom_left->x) +
-                                             (bottom_right->y - bottom_left->y) * (ball_pos->y - bottom_left->y));
-    rel_pos->y = TABLE_LENGTH / d_squared * ((bottom_left->y - bottom_right->y) * (ball_pos->x - bottom_left->x) +
-                                             (bottom_right->x - bottom_left->x) * (ball_pos->y - bottom_left->y))
+void image_to_table_position (struct xyf *image_pos, struct xyf *table_pos) {
+    float d_squared = (bottom_right.y - bottom_left.y) * (bottom_right.y - bottom_left.y) +
+                      (bottom_right.x - bottom_left.x) * (bottom_right.x - bottom_left.x);
+    table_pos->x = TABLE_LENGTH / d_squared * ((bottom_right.x - bottom_left.x) * (image_pos->x - bottom_left.x) +
+                                               (bottom_right.y - bottom_left.y) * (image_pos->y - bottom_left.y));
+    table_pos->y = TABLE_LENGTH / d_squared * ((bottom_left.y - bottom_right.y) * (image_pos->x - bottom_left.x) +
+                                               (bottom_right.x - bottom_left.x) * (image_pos->y - bottom_left.y))
                  + TABLE_HEIGHT;
+}
+
+void table_to_image_position (struct xyf *table_pos, SDL_Point *image_pos) {
+    image_pos->x = bottom_left.x +
+                   ((bottom_right.x - bottom_left.x) * table_pos->x +
+                    (bottom_right.y - bottom_left.y) * (TABLE_HEIGHT - table_pos->y)) / TABLE_LENGTH;
+    image_pos->y = bottom_left.y +
+                   ((bottom_right.x - bottom_left.x) * table_pos->y +
+                    (bottom_right.y - bottom_left.y) * table_pos->x -
+                    (bottom_right.x - bottom_left.x) * TABLE_HEIGHT) / TABLE_LENGTH;
 }
 
 void read_settings() {
@@ -234,10 +246,11 @@ void read_settings() {
     }
     fscanf(settings, "target_y: %hhd\ntarget_u: %hhd\ntarget_v: %hhd\nleft_corner_center: (%d, %d)\n"
                      "right_corner_center: (%d, %d)\nleft_corner_y: %hhd\nleft_corner_u: %hhd\n"
-                     "left_corner_v: %hhd\nright_corner_y: %hhd\nright_corner_u: %hhd\nright_corner_v: %hhd\n",
+                     "left_corner_v: %hhd\nright_corner_y: %hhd\nright_corner_u: %hhd\nright_corner_v: %hhd\n"
+                     "corner_loss_threshold: %d\n",
            &target_y, &target_u, &target_v, &left_corner_center.x, &left_corner_center.y, &right_corner_center.x,
            &right_corner_center.y, &left_corner_y, &left_corner_u, &left_corner_v, &right_corner_y,
-           &right_corner_u, &right_corner_v);
+           &right_corner_u, &right_corner_v, &corner_loss_threshold);
     if (fclose(settings)) {
         perror("error closing settings file");
         exit(1);
@@ -251,11 +264,12 @@ void write_settings() {
         exit(1);
     }
     dprintf(settings_fd, "target_y: %d\ntarget_u: %d\ntarget_v: %d\nleft_corner_center: (%d, %d)\n"
-                          "right_corner_center: (%d, %d)\nleft_corner_y: %d\nleft_corner_u: %d\n"
-                          "left_corner_v: %d\nright_corner_y: %d\nright_corner_u: %d\nright_corner_v: %d\n",
+                         "right_corner_center: (%d, %d)\nleft_corner_y: %d\nleft_corner_u: %d\n"
+                         "left_corner_v: %d\nright_corner_y: %d\nright_corner_u: %d\nright_corner_v: %d\n"
+                         "corner_loss_threshold: %d\n",
             target_y, target_u, target_v, left_corner_center.x, left_corner_center.y, right_corner_center.x,
             right_corner_center.y, left_corner_y, left_corner_u, left_corner_v, right_corner_y,
-            right_corner_u, right_corner_v);
+            right_corner_u, right_corner_v, corner_loss_threshold);
     if (close(settings_fd)) {
         perror("error closing settings file");
         exit(1);
@@ -487,7 +501,6 @@ int main (int argc, char *argv[]) {
     struct frameinfo cur_frameinfo;
     int frames_written = 0;
     int dt;
-    struct xy bottom_left, bottom_right;
     struct xyf ball_pos, rel_pos;
     struct xyf vel = {0, 0};
     struct xyf prev_pos = {0, 0};
@@ -508,10 +521,10 @@ int main (int argc, char *argv[]) {
         prev_timestamp = cur_buf->timestamp;
 
         loss_function((uint8_t *) cur_buf->m.userptr, losses);
-        find_corners((uint8_t *) cur_buf->m.userptr, &bottom_left, &bottom_right, losses);
+        find_corners((uint8_t *) cur_buf->m.userptr, losses);
         
-        if (find_center(losses, exists, &ball_pos, &bottom_left, &bottom_right)) {
-            relative_position(&bottom_left, &bottom_right, &ball_pos, &rel_pos);
+        if (find_center(losses, exists, &ball_pos)) {
+            image_to_table_position(&ball_pos, &rel_pos);
             if (have_prev_pos) {
                 vel.x = (rel_pos.x - prev_pos.x) / dt;  // units are mm/us
                 vel.y = (rel_pos.y - prev_pos.y) / dt;
@@ -536,7 +549,7 @@ int main (int argc, char *argv[]) {
         b.v_y = vel.y * 1000000;
         plan_rod_movement(&b, have_prev_pos);
 
-        if (do_output && output_SDL((uint8_t *) cur_buf->m.userptr, losses, exists, replay)) return -1;
+        if (do_output && output_SDL((uint8_t *) cur_buf->m.userptr, losses, exists, &b, replay)) return -1;
         handle_SDL_events((uint8_t *) cur_buf->m.userptr, losses, replay);
 
         if (logging) {

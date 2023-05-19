@@ -137,22 +137,39 @@ void move_player_to_y (struct rod *r, float y) {
         return;
     }
 
-    int chosen_player; 
-    if (r->prev_player == 1 && y >= r->player_base[1] - PLAYER_FOOT_RADIUS && y <= r->player_base[1] + r->travel + PLAYER_FOOT_RADIUS) {
+    r->intercept_y = y;
+
+    int chosen_player = -1;
+    
+    // decide if we could use each player
+    r->player_selection_state[0] = (y <= r->player_base[0] + r->travel + PLAYER_FOOT_RADIUS) ?
+                                   REACHABLE : UNREACHABLE;
+    r->player_selection_state[1] = (y >= r->player_base[1] - PLAYER_FOOT_RADIUS && 
+                                    y <= r->player_base[1] + r->travel + PLAYER_FOOT_RADIUS) ?
+                                   REACHABLE : UNREACHABLE;
+    r->player_selection_state[2] = (y >= r->player_base[2] - PLAYER_FOOT_RADIUS) ?
+                                   REACHABLE : UNREACHABLE;
+
+    // decide which player to use among those we can
+    // priorities: first, try to use the previous player we chose; second, try to use the middle player
+    if (r->player_selection_state[r->prev_player] == REACHABLE) {
+        r->player_selection_state[r->prev_player] = SELECTED;
+        chosen_player = r->prev_player;
+    } else if (r->player_selection_state[1] == REACHABLE) {
+        r->player_selection_state[1] = SELECTED;
         chosen_player = 1;
-    } else if (r->prev_player == 0 && y <= r->player_base[0] + r->travel + PLAYER_FOOT_RADIUS) {
-        chosen_player = 0;
-    } else if (r->prev_player == 2 && y >= r->player_base[2] - PLAYER_FOOT_RADIUS) {
-        chosen_player = 2;
-    } else if (y >= r->player_base[1] - PLAYER_FOOT_RADIUS && y <= r->player_base[1] + r->travel + PLAYER_FOOT_RADIUS) {
-        chosen_player = 1;
-    } else if (y <= r->player_base[0] + r->travel + PLAYER_FOOT_RADIUS) {
-        chosen_player = 0;
-    } else if (y >= r->player_base[2] - PLAYER_FOOT_RADIUS) {
-        chosen_player = 2;
     } else {
-        // should be unreachable
-        printf("ERROR: could not choose a player for y position %f\n", y);
+        for (int p = 0; p < r->num_players; p++) {
+            if (r->player_selection_state[p] == REACHABLE) {
+                r->player_selection_state[p] = SELECTED;
+                chosen_player = p;
+            }
+        }
+    }
+
+    // should be unreachable
+    if (chosen_player == -1) {
+        dprintf(2, "ERROR: could not choose a player for y position %f\n", y);
         return;
     }
 

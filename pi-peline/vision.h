@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <sys/time.h>
+#include <SDL2/SDL_rect.h>
 
 #define WIDTH                   640
 #define HEIGHT                  480
@@ -25,6 +26,9 @@ struct frameinfo {
     time_t tv_sec;
     suseconds_t tv_usec;
 };
+
+// awful to couple this part of the code to SDL but I'm lazy
+void table_to_image_position (struct xyf *table_pos, SDL_Point *image_pos);
 
 #endif
 
